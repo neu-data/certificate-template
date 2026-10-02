@@ -31,6 +31,8 @@ TEAL, NAVY, BLUE, GREY = (5, 95, 86), (4, 36, 47), (11, 55, 108), (128, 140, 150
 
 # Fixed text: (rough box in design px, text in the design, text to draw, font, colour, align, tracked)
 # The rough box only needs to enclose the original text; its exact extent is measured.
+# SCALE enlarges some items beyond the mock-up (which printed them too small to read):
+# text -> (size factor, vertical shift in design px).
 TEXT = [
     ((340, 310, 1195, 380), "CERTIFICATE OF COMPLETION", "CERTIFICATE OF COMPLETION", "GOTHICB.TTF", TEAL, "left", True),
     ((345, 415, 610, 460), "This is to certify that", "This is to certify that", "GOTHIC.TTF", GREY, "left", False),
@@ -52,6 +54,19 @@ TEXT = [
     ((760, 999, 1042, 1034), "Insight. Impact. Innovation.", "Insight. Impact. Innovation.", "georgiai.ttf", TEAL,
      "center", False),
 ]
+SCALE = {
+    "5 online sessions · 7.5 contact hours · 8 September – 6 October 2026 · Online": (1.08, -2),
+    "My Luong Vuong": (1.3, 0),
+    "Bernard Isekah Osang'ir": (1.3, 0),
+    "Lead Trainer, Senior Biostatistician": (1.22, 9),
+    "Trainer, Senior Biostatistician": (1.22, 7),
+    "Issued": (1.3, -4),
+    "06-10-2026": (1.35, 0),
+    "Neudata Consulting Ltd · www.neu-data.com": (1.15, 6),
+    "Insight. Impact. Innovation.": (1.15, 4),
+}
+# Signature lines in the design (y, x-start, x-end, design px): signatures sit above them
+SIG_LINES = [(857, 364, 712), (857, 1053, 1423)]
 # Erased here, filled per participant by the portal
 NAME_BOX = (345, 470, 1135, 590)               # "Participant Name"
 IDLINE_BOX = (636, 945, 1160, 974)             # "Certificate ID: ... · Verify at ..."
@@ -165,10 +180,11 @@ def main():
             f = font(fontname, fit_cap_height(fontname, y1 - y0))
             draw_tracked(d, x0, y0, new, f, colour, x1 - x0)
             continue
-        f = font(fontname, fit_width(fontname, orig, x1 - x0))
+        k, dy = SCALE.get(new, (1, 0))
+        f = font(fontname, fit_width(fontname, orig, x1 - x0) * k)
         b, ref = f.getbbox(new), f.getbbox(orig)
         x = x0 - b[0] if align == "left" else (x0 + x1) / 2 - (b[2] - b[0]) / 2 - b[0]
-        d.text((x, y0 - ref[1]), new, font=f, fill=colour)
+        d.text((x, y0 + dy * s - ref[1]), new, font=f, fill=colour)
 
     # caption under the QR code
     f = font("GOTHIC.TTF", 13 * s)
@@ -192,8 +208,21 @@ def main():
                    "w": round((id_box[2] - id_box[0] + 140) * pt, 1), "h": round((id_box[3] - id_box[1]) * pt, 1),
                    "size": round(id_font * pt, 1)},
         "qr": {"x": round(QR_BOX[0] * pt, 1), "y": round(QR_BOX[1] * pt, 1), "size": round((QR_BOX[2] - QR_BOX[0]) * pt, 1)},
+        # signature images: centred on each signature line, bottom just above it
+        "signatures": [{"cx": round((x0 + x1) / 2 * pt, 1), "bottom": round((y - 3) * pt, 1),
+                        "maxw": 150, "maxh": 46} for (y, x0, x1) in SIG_LINES],
     }
     (HERE / "layout.json").write_text(json.dumps(layout, indent=2), encoding="utf-8")
+
+    # ---- A4 landscape PowerPoint holding the background. Code.gs converts it to Google Slides:
+    # Slides cannot create an A4 page itself (new decks are always 16:9), but keeps an imported one.
+    from pptx import Presentation
+    from pptx.util import Pt
+    prs = Presentation()
+    prs.slide_width, prs.slide_height = Pt(PAGE_W_PT), Pt(PAGE_H_PT)
+    slide = prs.slides.add_slide(prs.slide_layouts[6])            # blank
+    slide.shapes.add_picture(str(out), 0, 0, prs.slide_width, prs.slide_height)
+    prs.save(HERE / "certificate-template.pptx")
     print(out, bg.size)
     print(json.dumps(layout))
 

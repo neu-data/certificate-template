@@ -21,8 +21,13 @@ Neudata Certificates/
 ├── Issued certificates/          ← a PDF copy of every certificate (automatic)
 ├── Certificate register          ← Google Sheet: ID, email, name, dates, status (automatic)
 ├── Certificate template (do not delete)   ← Google Slides design used for every certificate
-└── certificate-background.png
+├── signature-my-luong.png        ← YOU upload: Lead Trainer's signature (optional)
+└── signature-bernard.png         ← YOU upload: Trainer's signature (optional)
 ```
+
+### Signatures
+
+Upload each trainer's handwritten signature as a PNG (ideally a transparent background) into *Neudata Certificates* with exactly the names above. It is placed above that trainer's signature line on every new certificate; if a file is missing, the certificate is issued without that signature. Signatures stay private in Drive and must **never** be committed to this public repository.
 
 ### The eligible list
 
@@ -48,7 +53,7 @@ Do this signed in as **b.osangir@gmail.com**.
    - **+ → HTML** named `Verify` → paste `Verify.html`
 4. Select the function **`setup`** and click **Run**. Approve the permissions (Drive, Sheets, Slides, Gmail, and external requests for the QR code).
    - It creates the folders above and the certificate template.
-   - It downloads the background picture from this repository. If that fails, upload [`certificate-background.png`](certificate-background.png) into *Neudata Certificates* and run `setup` again.
+   - It downloads [`certificate-template.pptx`](certificate-template.pptx) (A4 landscape, background included) from this repository and converts it to Google Slides. If that fails, upload the file into *Neudata Certificates* and run `setup` again.
 5. **Deploy → New deployment → Web app**
    - *Execute as:* **Me (b.osangir@gmail.com)**
    - *Who has access:* **Anyone**
@@ -67,7 +72,8 @@ The design comes from [`design/certificate-design.webp`](design/certificate-desi
 
 | What | Where |
 |---|---|
-| Course name, dates, hours, issue date, trainers (printed text) | `TEXT` in `make_background.py` → run it → upload the new `certificate-background.png` to *Neudata Certificates* → run `setup` |
+| Course name, dates, hours, issue date, trainers (printed text) | `TEXT` (and `SCALE` for sizes) in `make_background.py` → run it → push the new `certificate-template.pptx` → run `setup` |
+| Start over after a design change (your own test certificate) | run `voidMyCertificate` in the editor, then generate again |
 | Same details in emails and on the verification page | `CONFIG` at the top of `Code.gs` |
 | ID prefix (`NDC-TR-2026-1`) | `CONFIG.idPrefix` in `Code.gs` |
 | Name font and size, ID line, QR position | `LAYOUT` in `Code.gs` (values from `layout.json`) |

@@ -20,6 +20,7 @@ L = json.loads((HERE / "layout.json").read_text(encoding="utf-8"))
 S = bg.width / L["page"]["w"]                     # px per pt
 d = ImageDraw.Draw(bg)
 NAVY, GREY = (4, 36, 47), (128, 140, 150)
+NAME_PT = 40                                      # LAYOUT.name.size in Code.gs
 
 name = sys.argv[1] if len(sys.argv) > 1 else "Participant Name"
 cert_id = "NDC-TR-2026-1-1047-001"
@@ -33,7 +34,7 @@ def name_size(n, base):
 
 # Name: left-aligned, vertically centred in its slot
 box = L["name"]
-f = ImageFont.truetype(str(FONTS / "BOD_B.TTF"), int(name_size(name, box["size"]) * S))
+f = ImageFont.truetype(str(FONTS / "BOD_B.TTF"), int(name_size(name, NAME_PT) * S))
 d.text((box["x"] * S, (box["y"] + box["h"] / 2) * S), name, font=f, fill=NAVY, anchor="lm")
 
 # ID line, centred

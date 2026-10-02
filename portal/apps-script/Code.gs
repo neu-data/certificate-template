@@ -16,8 +16,10 @@ const CONFIG = {
   issuedFolderName: 'Issued certificates',           // a copy of every certificate is saved here
   registerName: 'Certificate register',              // Google Sheet: one row per certificate
   templateName: 'Certificate template (do not delete)',
-  backgroundFileName: 'certificate-background.png',
-  backgroundUrl: 'https://raw.githubusercontent.com/neu-data/certificate-template/main/portal/certificate-background.png',
+  // A4 landscape PowerPoint holding the background (make_background.py). It is converted to
+  // Google Slides, because Slides cannot create an A4 page itself (new decks are 16:9).
+  templatePptxName: 'certificate-template.pptx',
+  templatePptxUrl: 'https://raw.githubusercontent.com/neu-data/certificate-template/main/portal/certificate-template.pptx',
 
   idPrefix: 'NDC-TR-2026-1',                          // -> NDC-TR-2026-1-10XX-001
   // Used in emails and on the verification page. The printed certificate text lives in the
@@ -26,9 +28,12 @@ const CONFIG = {
   details: '5 online sessions · 7.5 contact hours · 8 September – 6 October 2026 · Online',
   issued: '06-10-2026',                               // date printed on every certificate
   defaultDomain: 'gmail.com',                         // "b.osangir.txt" means b.osangir@gmail.com
+  // signature: name of a PNG (transparent background) in the "Neudata Certificates" Drive folder.
+  // Signatures are kept only in Drive, never in the public repository. If the file is missing,
+  // the certificate is issued without that signature.
   signatories: [
-    { name: 'My Luong Vuong', title: 'Lead Trainer, Senior Biostatistician' },
-    { name: "Bernard Isekah Osang'ir", title: 'Trainer, Senior Biostatistician' },
+    { name: 'My Luong Vuong', title: 'Lead Trainer, Senior Biostatistician', signature: 'signature-my-luong.png' },
+    { name: "Bernard Isekah Osang'ir", title: 'Trainer, Senior Biostatistician', signature: 'signature-bernard.png' },
   ],
 
   senderName: 'Neudata Consulting Ltd',
@@ -44,9 +49,11 @@ const CONFIG = {
 // padding, hence the small offsets.
 const PAGE = { w: 841.89, h: 595.28 };
 const LAYOUT = {
-  name:   { x: 193.3, y: 266, w: 512, h: 66, font: 'DM Serif Display', size: 54, color: '#04242F' },
+  name:   { x: 193.3, y: 266, w: 505, h: 66, font: 'DM Serif Display', size: 40, color: '#04242F' },
   idline: { x: 290, y: 532, w: 433, h: 20, font: 'Montserrat', size: 8.5, color: '#808C96', center: true },
   qr:     { x: 712.1, y: 268.6, size: 62.1 },
+  // signature images: centred on each signature line, bottom edge just above it
+  signatures: [{ cx: 303.6, bottom: 481.9, maxw: 150, maxh: 46 }, { cx: 698.6, bottom: 481.9, maxw: 150, maxh: 46 }],
 };
 
 // ===== Web app entry point ==============================================================
@@ -100,36 +107,46 @@ function createTemplate_(root) {
   const old = findFile_(root, CONFIG.templateName);
   if (old) old.setTrashed(true);
 
-  const pres = Slides.Presentations.create({
-    title: CONFIG.templateName,
-    pageSize: { width: { magnitude: PAGE.w, unit: 'PT' }, height: { magnitude: PAGE.h, unit: 'PT' } },
-  });
-  const deck = SlidesApp.openById(pres.presentationId);
+  const id = convertToSlides_(templatePptx_(root), CONFIG.templateName, root);
+  const deck = SlidesApp.openById(id);
+  if (Math.abs(deck.getPageWidth() - PAGE.w) > 2 || Math.abs(deck.getPageHeight() - PAGE.h) > 2) {
+    throw new Error('Template page is ' + deck.getPageWidth() + ' x ' + deck.getPageHeight() +
+                    ' pt, expected A4 landscape');
+  }
   const slide = deck.getSlides()[0];
-  slide.getPageElements().forEach(function (el) { el.remove(); });
-  slide.getBackground().setPictureFill(backgroundBlob_(root));
-
   // Only the per-participant items; everything else is part of the background image.
   box_(slide, LAYOUT.name, '{{NAME}}');
   box_(slide, LAYOUT.idline, 'Certificate ID: {{ID}}  ·  Verify at contact@neu-data.com');
   deck.saveAndClose();
-
-  const file = DriveApp.getFileById(pres.presentationId);
-  file.moveTo(root);
-  return file;
+  return DriveApp.getFileById(id);
 }
 
-function backgroundBlob_(root) {
-  const local = findFile_(root, CONFIG.backgroundFileName);
+function templatePptx_(root) {
+  const local = findFile_(root, CONFIG.templatePptxName);
   if (local) return local.getBlob();
-  const res = UrlFetchApp.fetch(CONFIG.backgroundUrl, { muteHttpExceptions: true });
+  const res = UrlFetchApp.fetch(CONFIG.templatePptxUrl, { muteHttpExceptions: true });
   if (res.getResponseCode() !== 200) {
-    throw new Error('Background image not found. Upload ' + CONFIG.backgroundFileName +
+    throw new Error('Template not found. Upload ' + CONFIG.templatePptxName +
                     ' into the "' + CONFIG.rootFolderName + '" folder and run setup() again.');
   }
-  const blob = res.getBlob().setName(CONFIG.backgroundFileName);
-  root.createFile(blob);
-  return blob;
+  return res.getBlob().setName(CONFIG.templatePptxName);
+}
+
+// Upload a .pptx to Drive as a Google Slides file (Drive API v3 multipart upload with conversion).
+function convertToSlides_(blob, name, folder) {
+  const boundary = 'neudata' + Date.now();
+  const meta = JSON.stringify({ name: name, mimeType: MimeType.GOOGLE_SLIDES, parents: [folder.getId()] });
+  const head = '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta +
+               '\r\n--' + boundary + '\r\nContent-Type: ' +
+               'application/vnd.openxmlformats-officedocument.presentationml.presentation\r\n\r\n';
+  const payload = Utilities.newBlob(head).getBytes().concat(blob.getBytes())
+    .concat(Utilities.newBlob('\r\n--' + boundary + '--').getBytes());
+  const res = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+    method: 'post', contentType: 'multipart/related; boundary=' + boundary, payload: payload,
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true,
+  });
+  if (res.getResponseCode() !== 200) throw new Error('Template conversion failed: ' + res.getContentText());
+  return JSON.parse(res.getContentText()).id;
 }
 
 function box_(slide, L, text) {
@@ -203,7 +220,7 @@ function generateCertificate(email, name, loginCode, lang) {
   let row, id, existing = false;
   try {
     const data = sheet.getDataRange().getValues();
-    const idx = data.findIndex(function (r, i) { return i > 0 && r[1] === key; });
+    const idx = data.findIndex(function (r, i) { return i > 0 && r[1] === key && r[7] !== 'void'; });
     if (idx > 0) {
       existing = true;
       row = idx + 1;
@@ -307,6 +324,7 @@ function buildPdf_(id, name) {
     });
     const qr = slide.insertImage(qrBlob_(verifyUrl_(id)));
     qr.setLeft(LAYOUT.qr.x).setTop(LAYOUT.qr.y).setWidth(LAYOUT.qr.size).setHeight(LAYOUT.qr.size);
+    addSignatures_(slide);
     deck.saveAndClose();
     const pdf = copy.getAs('application/pdf').setName(id + '_' + slug_(name) + '.pdf');
     return issued.createFile(pdf);
@@ -318,7 +336,21 @@ function buildPdf_(id, name) {
 // Long names shrink so they stay on one line beside the QR code
 function nameSize_(name) {
   const n = name.length, base = LAYOUT.name.size;
-  return Math.round(n <= 18 ? base : n <= 24 ? base * 0.84 : n <= 30 ? base * 0.7 : n <= 38 ? base * 0.58 : base * 0.48);
+  return Math.round(n <= 24 ? base : n <= 30 ? base * 0.85 : n <= 38 ? base * 0.7 : base * 0.58);
+}
+
+// Each trainer's signature (a PNG in the Drive folder), scaled to fit above their signature line.
+function addSignatures_(slide) {
+  const root = DriveApp.getFolderById(PropertiesService.getScriptProperties().getProperty('ROOT_ID'));
+  CONFIG.signatories.forEach(function (s, i) {
+    const file = s.signature && findFile_(root, s.signature);
+    if (!file) return;
+    const img = slide.insertImage(file.getBlob());
+    const box = LAYOUT.signatures[i];
+    const k = Math.min(box.maxw / img.getWidth(), box.maxh / img.getHeight());
+    const w = img.getWidth() * k, h = img.getHeight() * k;
+    img.setWidth(w).setHeight(h).setLeft(box.cx - w / 2).setTop(box.bottom - h);
+  });
 }
 
 function qrBlob_(text) {
@@ -419,6 +451,20 @@ function testIssueToMe() {
   if (!eligibleSet_().has(key)) throw new Error('Add ' + me.split('@')[0] + '.txt to Eligible participants first');
   CacheService.getScriptCache().put('code:' + key, '123456', 300);
   Logger.log(JSON.stringify(generateCertificate(me, 'Test Participant', '123456', 'en')));
+}
+
+// Admin helper: withdraw your own certificate(s) so you can generate a fresh one (e.g. after a
+// design change). The register row is kept and marked "void"; the old PDF stays in Drive.
+function voidMyCertificate() {
+  const key = normalizeEmail_(Session.getEffectiveUser().getEmail());
+  const sheet = registerSheet_();
+  const data = sheet.getDataRange().getValues();
+  data.forEach(function (r, i) {
+    if (i > 0 && r[1] === key && r[7] !== 'void') {
+      sheet.getRange(i + 1, 8).setValue('void');
+      Logger.log('Voided %s', r[0]);
+    }
+  });
 }
 
 // Admin helper: put your own address on the eligible list (creates "<gmail name>.txt").
