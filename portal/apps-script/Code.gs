@@ -56,11 +56,16 @@ function doGet(e) {
     const t = HtmlService.createTemplateFromFile('Verify');
     t.result = verifyCertificate_(String(params.verify));
     return t.evaluate().setTitle('Verify certificate · Neudata')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
-  return HtmlService.createTemplateFromFile('Portal').evaluate()
+  const t = HtmlService.createTemplateFromFile('Portal');
+  t.lang = params.lang === 'vi' || params.lang === 'en' ? params.lang : '';   // ?lang=vi from the course site
+  return t.evaluate()
     .setTitle('Certificate · Clinical Data Analysis in R · Neudata')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+    // allow the portal to be embedded in the course website's Certificate page
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 // ===== One-time setup (run from the editor) ===============================================
@@ -414,4 +419,13 @@ function testIssueToMe() {
   if (!eligibleSet_().has(key)) throw new Error('Add ' + me.split('@')[0] + '.txt to Eligible participants first');
   CacheService.getScriptCache().put('code:' + key, '123456', 300);
   Logger.log(JSON.stringify(generateCertificate(me, 'Test Participant', '123456', 'en')));
+}
+
+// Admin helper: put your own address on the eligible list (creates "<gmail name>.txt").
+function addMeToEligibleList() {
+  const me = Session.getEffectiveUser().getEmail();
+  const folder = DriveApp.getFolderById(PropertiesService.getScriptProperties().getProperty('ELIGIBLE_ID'));
+  const name = (me.endsWith('@' + CONFIG.defaultDomain) ? me.split('@')[0] : me) + '.txt';
+  if (!folder.getFilesByName(name).hasNext()) folder.createFile(name, '');
+  Logger.log('Eligible: %s', name);
 }

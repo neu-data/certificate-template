@@ -130,8 +130,11 @@ const T = {
     ERROR: "Đã xảy ra lỗi. Vui lòng thử lại sau hoặc liên hệ contact@neu-data.com.",
   },
 };
+// Language: ?lang= from the course site wins, then the visitor's saved choice, then the browser.
+const fromSite = "<?= lang ?>";
 let lang = (navigator.language || "").toLowerCase().startsWith("vi") ? "vi" : "en";
 try { lang = localStorage.getItem("neudata-course-lang") || lang; } catch (e) {}
+if (fromSite === "vi" || fromSite === "en") lang = fromSite;
 
 function setLang(l) {
   lang = l;
