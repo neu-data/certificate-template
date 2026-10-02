@@ -1,0 +1,15 @@
+{
+  "course": "Clinical Data Analysis in R — Phase I",
+  "kind": "Certificate of Completion",
+  "details": "5 online sessions · 7.5 contact hours",
+  "dates": "8 September – 6 October 2026",
+  "location": "Online",
+  "issued": "06-10-2026",
+  "id_prefix": "NDC-TR-2026",
+  "min_sessions": 4,
+  "require_assignment": true,
+  "signatories": [
+    { "name": "Signatory Name", "title": "Lead Trainer, Senior Biostatistician" },
+    { "name": "Signatory Name", "title": "Trainer, Biostatistician" }
+  ]
+}

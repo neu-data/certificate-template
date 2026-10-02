@@ -1,0 +1,5 @@
+name,email,sessions_attended,assignment,id
+Example Participant One,one@example.org,5,yes,
+Example Participant Two,two@example.org,4,yes,
+Example Participant Three,three@example.org,3,yes,
+Example Participant Four,four@example.org,5,no,
