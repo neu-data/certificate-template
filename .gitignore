@@ -1,0 +1,4 @@
+participants.csv
+output/*
+!output/.gitkeep
+__pycache__/
