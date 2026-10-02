@@ -453,6 +453,17 @@ function testIssueToMe() {
   Logger.log(JSON.stringify(generateCertificate(me, 'Test Participant', '123456', 'en')));
 }
 
+// Admin helper: build a sample certificate (no email, not in the register) as
+// "Certificate preview.pdf" in the Neudata Certificates folder, to check the design.
+function previewCertificate() {
+  const root = DriveApp.getFolderById(PropertiesService.getScriptProperties().getProperty('ROOT_ID'));
+  const old = findFile_(root, 'Certificate preview.pdf');
+  if (old) old.setTrashed(true);
+  const pdf = buildPdf_(CONFIG.idPrefix + '-1047-001', "Bernard Isekah Osang'ir");
+  pdf.setName('Certificate preview.pdf').moveTo(root);
+  Logger.log('Preview: %s', pdf.getUrl());
+}
+
 // Admin helper: withdraw your own certificate(s) so you can generate a fresh one (e.g. after a
 // design change). The register row is kept and marked "void"; the old PDF stays in Drive.
 function voidMyCertificate() {
