@@ -1,10 +1,12 @@
-"""Preview the finished certificate with sample data (same layout the portal uses).
+"""Preview a finished certificate with sample data, using the same slots as the portal.
 
     python portal/preview.py "Nguyễn Thị Minh Phương"
 
-Writes portal/preview.png. Positions mirror LAYOUT in Code.gs (points on an
-842 x 595 pt A4-landscape page).
+Reads portal/certificate-background.png and portal/layout.json (both written by
+make_background.py) and writes portal/preview.png. In the real certificate the name
+is set in Playfair Display (Google Slides); here Bodoni MT stands in for it.
 """
+import json
 import sys
 from pathlib import Path
 
@@ -12,63 +14,44 @@ import qrcode
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = Path(__file__).parent
-bg = Image.open(HERE / "certificate-background.png").convert("RGB")
-S = bg.width / 842.0                     # px per pt
-d = ImageDraw.Draw(bg)
-
 FONTS = Path("C:/Windows/Fonts")
-def font(names, size):
-    for n in names:
-        p = FONTS / n
-        if p.exists():
-            return ImageFont.truetype(str(p), int(size * S))
-    return ImageFont.load_default()
-
-SANS_B = ["GOTHICB.TTF", "segoeuib.ttf", "arialbd.ttf"]
-SANS = ["GOTHIC.TTF", "segoeui.ttf", "arial.ttf"]
-SERIF = ["georgia.ttf", "times.ttf"]
-SERIF_I = ["georgiai.ttf", "timesi.ttf"]
-TEAL, NAVY, BLUE, GREY = "#055F56", "#04242F", "#0B376C", "#8A99A3"
+bg = Image.open(HERE / "certificate-background.png").convert("RGB")
+L = json.loads((HERE / "layout.json").read_text(encoding="utf-8"))
+S = bg.width / L["page"]["w"]                     # px per pt
+d = ImageDraw.Draw(bg)
+NAVY, GREY = (4, 36, 47), (128, 140, 150)
 
 name = sys.argv[1] if len(sys.argv) > 1 else "Participant Name"
 cert_id = "NDC-TR-2026-1-1047-001"
 verify_url = f"https://script.google.com/macros/s/EXAMPLE/exec?verify={cert_id}"
 
 
-def text(x, y, s, f, fill, anchor="la", w=None):
-    if w is not None:                  # centre inside a box of width w
-        x, anchor = x + w / 2, anchor.replace("l", "m")
-    d.text((x * S, y * S), s, font=f, fill=fill, anchor=anchor)
+def name_size(n, base):
+    k = len(n)
+    return base if k <= 18 else base * 0.84 if k <= 24 else base * 0.7 if k <= 30 else base * 0.58 if k <= 38 else base * 0.48
 
 
-def name_size(n):
-    L = len(n)
-    return 44 if L <= 22 else 36 if L <= 30 else 30 if L <= 38 else 24
+# Name: left-aligned, vertically centred in its slot
+box = L["name"]
+f = ImageFont.truetype(str(FONTS / "BOD_B.TTF"), int(name_size(name, box["size"]) * S))
+d.text((box["x"] * S, (box["y"] + box["h"] / 2) * S), name, font=f, fill=NAVY, anchor="lm")
 
+# ID line, centred
+box = L["idline"]
+f = ImageFont.truetype(str(FONTS / "GOTHIC.TTF"), int(box["size"] * S))
+fb = ImageFont.truetype(str(FONTS / "GOTHICB.TTF"), int(box["size"] * S))
+parts = [("Certificate ID: ", f, GREY), (cert_id, fb, NAVY), ("  ·  Verify at contact@neu-data.com", f, GREY)]
+total = sum(ft.getlength(t) for t, ft, _ in parts)
+x = (box["x"] + box["w"] / 2) * S - total / 2
+for t, ft, c in parts:
+    d.text((x, (box["y"] + box["h"] / 2) * S), t, font=ft, fill=c, anchor="lm")
+    x += ft.getlength(t)
 
-text(198, 197, "CERTIFICATE OF COMPLETION", font(SANS_B, 25), TEAL, "lm")
-text(200, 245, "This is to certify that", font(SANS, 13), GREY, "lm")
-text(197, 293, name, font(SERIF, name_size(name)), NAVY, "lm")
-text(200, 344, "has successfully completed", font(SANS, 13), GREY, "lm")
-text(198, 381, "Clinical Data Analysis in R — Phase I", font(SANS_B, 23), BLUE, "lm")
-text(200, 417, "5 online sessions · 7.5 contact hours · 8 September – 6 October 2026 · Online",
-     font(SANS, 12), NAVY, "lm")
-text(206, 498, "My Luong Vuong", font(SANS_B, 11), NAVY, "mm", w=196)
-text(206, 514, "Lead Trainer, Senior Biostatistician", font(SANS, 9), GREY, "mm", w=196)
-text(594, 498, "Bernard Isekah Osang'ir", font(SANS_B, 11), NAVY, "mm", w=209)
-text(594, 514, "Trainer, Senior Biostatistician", font(SANS, 9), GREY, "mm", w=209)
-text(436, 491, "Issued", font(SANS, 9), GREY, "mm", w=113)
-text(436, 508, "06-10-2026", font(SANS_B, 12), NAVY, "mm", w=113)
-text(226, 542, f"Certificate ID: {cert_id}  ·  Scan the QR code to verify", font(SANS, 8.5), GREY, "mm", w=530)
-text(226, 556, "Neudata Consulting Ltd  ·  www.neu-data.com  ·  contact@neu-data.com", font(SANS, 8.5), GREY, "mm", w=530)
-text(226, 572, "Insight. Impact. Innovation.", font(SERIF_I, 11), TEAL, "mm", w=530)
-
-qr = qrcode.make(verify_url, box_size=10, border=1).convert("RGB")
-size = int(66 * S)
-qr = qr.resize((size, size), Image.NEAREST)
-d.rectangle([int(726 * S), int(207 * S), int(796 * S), int(277 * S)], fill="white")
-bg.paste(qr, (int(728 * S), int(209 * S)))
-text(728, 284, "Scan to verify", font(SANS, 7.5), GREY, "mm", w=66)
+# QR code
+q = L["qr"]
+size = int(q["size"] * S)
+img = qrcode.make(verify_url, box_size=10, border=1).convert("RGB").resize((size, size), Image.NEAREST)
+bg.paste(img, (int(q["x"] * S), int(q["y"] * S)))
 
 out = HERE / "preview.png"
 bg.save(out)

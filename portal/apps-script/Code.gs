@@ -20,6 +20,8 @@ const CONFIG = {
   backgroundUrl: 'https://raw.githubusercontent.com/neu-data/certificate-template/main/portal/certificate-background.png',
 
   idPrefix: 'NDC-TR-2026-1',                          // -> NDC-TR-2026-1-10XX-001
+  // Used in emails and on the verification page. The printed certificate text lives in the
+  // background image (portal/make_background.py) — keep the two in step.
   course: 'Clinical Data Analysis in R — Phase I',
   details: '5 online sessions · 7.5 contact hours · 8 September – 6 October 2026 · Online',
   issued: '06-10-2026',                               // date printed on every certificate
@@ -35,27 +37,16 @@ const CONFIG = {
   resendCooldownMinutes: 10,                          // stops repeated clicks from flooding an inbox
 };
 
-// Positions in points on an 842 x 595 pt (A4 landscape) page. Mirrors portal/preview.py.
-// Slides text boxes have ~7 pt inner padding, hence the small left offsets.
+// The background (portal/certificate-background.png) already carries the artwork, logo and
+// all fixed text, drawn to match the approved design. Only these three items are added per
+// participant. Positions are in points on an 842 x 595 pt page — values from
+// portal/layout.json (written by make_background.py). Slides text boxes have ~7 pt inner
+// padding, hence the small offsets.
 const PAGE = { w: 841.89, h: 595.28 };
 const LAYOUT = {
-  title:     { x: 191, y: 180, w: 520, h: 34, font: 'Montserrat', size: 25, bold: true,  color: '#055F56' },
-  certify:   { x: 193, y: 234, w: 360, h: 22, font: 'Montserrat', size: 13, bold: false, color: '#8A99A3' },
-  name:      { x: 190, y: 262, w: 560, h: 62, font: 'Playfair Display', size: 44, bold: false, color: '#04242F' },
-  completed: { x: 193, y: 333, w: 360, h: 22, font: 'Montserrat', size: 13, bold: false, color: '#8A99A3' },
-  course:    { x: 191, y: 365, w: 560, h: 34, font: 'Montserrat', size: 23, bold: true,  color: '#0B376C' },
-  details:   { x: 193, y: 405, w: 560, h: 22, font: 'Montserrat', size: 12, bold: false, color: '#04242F' },
-  sign1:     { x: 206, y: 488, w: 196, h: 18, font: 'Montserrat', size: 11, bold: true,  color: '#04242F', center: true },
-  sign1t:    { x: 196, y: 505, w: 216, h: 16, font: 'Montserrat', size: 9,  bold: false, color: '#8A99A3', center: true },
-  sign2:     { x: 594, y: 488, w: 209, h: 18, font: 'Montserrat', size: 11, bold: true,  color: '#04242F', center: true },
-  sign2t:    { x: 584, y: 505, w: 229, h: 16, font: 'Montserrat', size: 9,  bold: false, color: '#8A99A3', center: true },
-  issuedL:   { x: 436, y: 482, w: 113, h: 16, font: 'Montserrat', size: 9,  bold: false, color: '#8A99A3', center: true },
-  issued:    { x: 436, y: 498, w: 113, h: 20, font: 'Montserrat', size: 12, bold: true,  color: '#04242F', center: true },
-  idline:    { x: 206, y: 533, w: 570, h: 16, font: 'Montserrat', size: 8.5, bold: false, color: '#8A99A3', center: true },
-  company:   { x: 206, y: 547, w: 570, h: 16, font: 'Montserrat', size: 8.5, bold: false, color: '#8A99A3', center: true },
-  tagline:   { x: 206, y: 562, w: 570, h: 20, font: 'Lora', size: 11, bold: false, italic: true, color: '#055F56', center: true },
-  qr:        { x: 728, y: 209, size: 66 },
-  qrcap:     { x: 714, y: 277, w: 94, h: 14, font: 'Montserrat', size: 7.5, bold: false, color: '#8A99A3', center: true },
+  name:   { x: 193.3, y: 266, w: 512, h: 66, font: 'DM Serif Display', size: 54, color: '#04242F' },
+  idline: { x: 290, y: 532, w: 433, h: 20, font: 'Montserrat', size: 8.5, color: '#808C96', center: true },
+  qr:     { x: 712.1, y: 268.6, size: 62.1 },
 };
 
 // ===== Web app entry point ==============================================================
@@ -113,23 +104,9 @@ function createTemplate_(root) {
   slide.getPageElements().forEach(function (el) { el.remove(); });
   slide.getBackground().setPictureFill(backgroundBlob_(root));
 
-  const S = CONFIG.signatories;
-  box_(slide, LAYOUT.title, 'CERTIFICATE OF COMPLETION');
-  box_(slide, LAYOUT.certify, 'This is to certify that');
+  // Only the per-participant items; everything else is part of the background image.
   box_(slide, LAYOUT.name, '{{NAME}}');
-  box_(slide, LAYOUT.completed, 'has successfully completed');
-  box_(slide, LAYOUT.course, CONFIG.course);
-  box_(slide, LAYOUT.details, CONFIG.details);
-  box_(slide, LAYOUT.sign1, S[0].name);
-  box_(slide, LAYOUT.sign1t, S[0].title);
-  box_(slide, LAYOUT.sign2, S[1].name);
-  box_(slide, LAYOUT.sign2t, S[1].title);
-  box_(slide, LAYOUT.issuedL, 'Issued');
-  box_(slide, LAYOUT.issued, CONFIG.issued);
-  box_(slide, LAYOUT.idline, 'Certificate ID: {{ID}}  ·  Scan the QR code to verify');
-  box_(slide, LAYOUT.company, 'Neudata Consulting Ltd  ·  www.neu-data.com  ·  contact@neu-data.com');
-  box_(slide, LAYOUT.tagline, 'Insight. Impact. Innovation.');
-  box_(slide, LAYOUT.qrcap, 'Scan to verify');
+  box_(slide, LAYOUT.idline, 'Certificate ID: {{ID}}  ·  Verify at contact@neu-data.com');
   deck.saveAndClose();
 
   const file = DriveApp.getFileById(pres.presentationId);
@@ -314,7 +291,15 @@ function buildPdf_(id, name) {
           .setFontSize(nameSize_(name)).setForegroundColor(LAYOUT.name.color);
       }
     });
-    deck.replaceAllText('{{ID}}', id);
+    slide.getShapes().forEach(function (shape) {
+      const text = shape.getText();
+      if (text.asString().indexOf('{{ID}}') >= 0) {
+        text.replaceAllText('{{ID}}', id);
+        text.find(id.replace(/[-]/g, '\\-')).forEach(function (r) {   // ID in bold navy, as in the design
+          r.getTextStyle().setBold(true).setForegroundColor('#04242F');
+        });
+      }
+    });
     const qr = slide.insertImage(qrBlob_(verifyUrl_(id)));
     qr.setLeft(LAYOUT.qr.x).setTop(LAYOUT.qr.y).setWidth(LAYOUT.qr.size).setHeight(LAYOUT.qr.size);
     deck.saveAndClose();
@@ -325,9 +310,10 @@ function buildPdf_(id, name) {
   }
 }
 
+// Long names shrink so they stay on one line beside the QR code
 function nameSize_(name) {
-  const n = name.length;
-  return n <= 22 ? 44 : n <= 30 ? 36 : n <= 38 ? 30 : 24;
+  const n = name.length, base = LAYOUT.name.size;
+  return Math.round(n <= 18 ? base : n <= 24 ? base * 0.84 : n <= 30 ? base * 0.7 : n <= 38 ? base * 0.58 : base * 0.48);
 }
 
 function qrBlob_(text) {

@@ -63,12 +63,17 @@ In Gmail (b.osangir@gmail.com): **Settings → Accounts and Import → Send mail
 
 ## Changing the certificate
 
+The design comes from [`design/certificate-design.webp`](design/certificate-design.webp). `make_background.py` keeps its wave artwork and frame, erases the text, and redraws the logo and all fixed text crisply at print resolution — so the background PNG already contains the title, course, dates, trainers and footer. The portal adds only the **name**, the **certificate ID** and the **QR code**.
+
 | What | Where |
 |---|---|
-| Course name, dates, hours, issue date, ID prefix, trainers | `CONFIG` at the top of `Code.gs`, then run `setup` again to rebuild the template |
-| Layout, fonts, colours | Edit *Certificate template* in Google Slides directly (keep the `{{NAME}}` and `{{ID}}` placeholders) |
-| Background artwork | `python portal/make_background.py`, upload the new PNG, run `setup` |
+| Course name, dates, hours, issue date, trainers (printed text) | `TEXT` in `make_background.py` → run it → upload the new `certificate-background.png` to *Neudata Certificates* → run `setup` |
+| Same details in emails and on the verification page | `CONFIG` at the top of `Code.gs` |
+| ID prefix (`NDC-TR-2026-1`) | `CONFIG.idPrefix` in `Code.gs` |
+| Name font and size, ID line, QR position | `LAYOUT` in `Code.gs` (values from `layout.json`) |
 | Preview locally | `python portal/preview.py "Participant Name"` |
+
+Requires Python with Pillow, OpenCV, NumPy and `qrcode` (`pip install pillow opencv-python numpy qrcode`).
 
 ## Rules built in
 

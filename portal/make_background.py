@@ -1,125 +1,202 @@
-"""Draw the certificate background (wave artwork, frame, logo, title bar).
+"""Build the certificate background from the approved design.
 
     python portal/make_background.py
 
-Writes portal/certificate-background.png (A4 landscape, 300 dpi). All text, the
-participant name, the ID and the QR code are added on top of this image by the
-portal (Apps Script), so the background never contains personal data.
+Source: portal/design/certificate-design.webp (the approved mock-up, 1492 x 1054).
+1. Every piece of text and the logo are erased from the design (inpainting), keeping the
+   wave artwork, frame and accents exactly as designed.
+2. The image is upscaled to print resolution (A4 landscape, 300 dpi).
+3. The logo and all fixed text are redrawn crisply, each one sized and positioned to match
+   the text it replaces in the design.
+
+The participant name, certificate ID and QR code are added later by the portal (Code.gs).
+Writes portal/certificate-background.png and portal/layout.json (the boxes for those
+three items, in points, used by Code.gs and preview.py).
 """
+import json
 from pathlib import Path
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+import cv2
 import numpy as np
-from matplotlib.colors import LinearSegmentedColormap
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 HERE = Path(__file__).parent
+DESIGN = HERE / "design" / "certificate-design.webp"
 LOGO = HERE.parent / "assets" / "neudata-logo.png"
-OUT = HERE / "certificate-background.png"
+FONTS = Path("C:/Windows/Fonts")
+OUT_W, OUT_H = 3508, 2480                       # A4 landscape at 300 dpi
+PAGE_W_PT, PAGE_H_PT = 841.89, 595.28
 
-# Design grid: 1492 x 1054 units (matches the approved mock-up), rendered at 3508 x 2480 px
-W, H = 1492, 1054
-TEAL, NAVY, BLUE = "#055F56", "#04242F", "#0B376C"
-waves = LinearSegmentedColormap.from_list("neudata", ["#2BB3A3", "#0E8C80", TEAL, BLUE, NAVY])
+TEAL, NAVY, BLUE, GREY = (5, 95, 86), (4, 36, 47), (11, 55, 108), (128, 140, 150)
 
-fig = plt.figure(figsize=(11.693, 8.268), dpi=300)
-ax = fig.add_axes([0, 0, 1, 1])
-ax.set_xlim(0, W)
-ax.set_ylim(H, 0)          # y grows downwards, like the mock-up
-ax.axis("off")
-fig.patch.set_facecolor("white")
-
-# ---- Wave artwork: two families of fine curves that cross into a mesh ---------------------
-def bezier(p0, p1, p2, p3, n=500):
-    t = np.linspace(0, 1, n)[:, None]
-    pts = (1 - t) ** 3 * p0 + 3 * (1 - t) ** 2 * t * p1 + 3 * (1 - t) * t ** 2 * p2 + t ** 3 * p3
-    return pts[:, 0], pts[:, 1]
-
-n = 46
-# Left edge: strands run top to bottom, bulging right and crossing twice
-for fam, (ox, sign) in enumerate([(0, 1), (35, -1)]):
-    for i in range(n):
-        t = i / (n - 1)
-        p0 = np.array([-60 + 140 * t, -40])
-        p1 = np.array([60 + 230 * t + ox, 260 + sign * 120 * t])
-        p2 = np.array([-120 + 260 * (1 - t) + ox, 640 - sign * 90 * t])
-        p3 = np.array([180 + 260 * t, H + 40])
-        xs, ys = bezier(p0, p1, p2, p3)
-        c = waves(t if fam == 0 else 1 - t)
-        ax.plot(xs, ys, color=c, lw=0.42, alpha=0.75)
-
-# Top-right: strands sweep from the top edge across to the right edge
-for fam, sign in enumerate([1, -1]):
-    for i in range(n):
-        t = i / (n - 1)
-        p0 = np.array([760 + 260 * t, -30])
-        p1 = np.array([1060 + 120 * sign * t, 140 + 60 * t])
-        p2 = np.array([1240 - 60 * sign * t, 60 + 260 * t])
-        p3 = np.array([W + 40, 120 + 420 * t])
-        xs, ys = bezier(p0, p1, p2, p3)
-        c = waves(1 - t if fam == 0 else t)
-        ax.plot(xs, ys, color=c, lw=0.42, alpha=0.7)
+# Fixed text: (rough box in design px, text in the design, text to draw, font, colour, align, tracked)
+# The rough box only needs to enclose the original text; its exact extent is measured.
+TEXT = [
+    ((340, 310, 1195, 380), "CERTIFICATE OF COMPLETION", "CERTIFICATE OF COMPLETION", "GOTHICB.TTF", TEAL, "left", True),
+    ((345, 415, 610, 460), "This is to certify that", "This is to certify that", "GOTHIC.TTF", GREY, "left", False),
+    ((345, 592, 690, 636), "has successfully completed", "has successfully completed", "GOTHIC.TTF", GREY, "left", False),
+    ((345, 643, 1300, 715), "Clinical Data Analysis in R — Phase I", "Clinical Data Analysis in R — Phase I",
+     "GOTHICB.TTF", BLUE, "left", False),
+    ((345, 720, 1280, 762), "5 online sessions · 7.5 contact hours · 8 September – 6 October 2026 · Online",
+     "5 online sessions · 7.5 contact hours · 8 September – 6 October 2026 · Online", "GOTHIC.TTF", NAVY, "left", False),
+    ((440, 872, 620, 906), "Signatory Name", "My Luong Vuong", "GOTHICB.TTF", NAVY, "center", False),
+    ((385, 905, 690, 934), "Lead Trainer, Senior Biostatistician", "Lead Trainer, Senior Biostatistician",
+     "GOTHIC.TTF", GREY, "center", False),
+    ((838, 864, 908, 890), "Issued", "Issued", "GOTHIC.TTF", GREY, "center", False),
+    ((805, 893, 942, 926), "06-10-2026", "06-10-2026", "GOTHICB.TTF", NAVY, "center", False),
+    ((1145, 874, 1325, 908), "Signatory Name", "Bernard Isekah Osang'ir", "GOTHICB.TTF", NAVY, "center", False),
+    ((1112, 906, 1375, 936), "Trainer, Senior Biostatistician", "Trainer, Senior Biostatistician",
+     "GOTHIC.TTF", GREY, "center", False),
+    ((720, 970, 1080, 998), "Neudata Consulting Ltd · www.neu-data.com", "Neudata Consulting Ltd · www.neu-data.com",
+     "GOTHIC.TTF", GREY, "center", False),
+    ((760, 999, 1042, 1034), "Insight. Impact. Innovation.", "Insight. Impact. Innovation.", "georgiai.ttf", TEAL,
+     "center", False),
+]
+# Erased here, filled per participant by the portal
+NAME_BOX = (345, 470, 1135, 590)               # "Participant Name"
+IDLINE_BOX = (636, 945, 1160, 974)             # "Certificate ID: ... · Verify at ..."
+LOGO_BOX = (295, 88, 575, 272)
+# New element (not in the mock-up): QR code beside the name, with a caption
+QR_BOX = (1262, 476, 1372, 586)
+QR_CAPTION_Y = 592
 
 
-# ---- Frame: corner brackets and edge lines ----------------------------------------------------
-frame = dict(color=TEAL, lw=1.3, zorder=3, solid_capstyle="round")
-ax.plot([40, 1065], [36, 36], **frame)            # top
-ax.plot([40, 40], [36, 110], **frame)
-ax.plot([1340, 1460], [36, 36], **frame)          # top-right corner
-ax.plot([1460, 1460], [36, 110], **frame)
-ax.plot([1460, 1460], [500, 1016], **frame)       # right
-ax.plot([1090, 1460], [1016, 1016], **frame)      # bottom right
-ax.plot([385, 710], [1016, 1016], **frame)        # bottom middle
-ax.plot([36, 36], [925, 1016], **frame)           # bottom-left corner
-ax.plot([36, 235], [1016, 1016], **frame)
+def measure(img, box, thresh=200):
+    """Bounding box of the dark/coloured pixels inside a rough box (design px)."""
+    x0, y0, x1, y1 = box
+    crop = np.asarray(img.convert("L"))[y0:y1, x0:x1]
+    ys, xs = np.where(crop < thresh)
+    if len(xs) == 0:
+        return box
+    return (x0 + xs.min(), y0 + ys.min(), x0 + xs.max() + 1, y0 + ys.max() + 1)
 
-# Circuit-style accents with nodes, echoing the data theme
-for (xx, y0, y1, nodes) in [(111, 88, 330, [(111, 325, "fill")]),
-                            (140, 180, 330, [(140, 181, "ring")]),
-                            (115, 436, 1000, [(115, 436, "fill"), (115, 533, "fill"), (117, 850, "fill")]),
-                            (60, 508, 910, [(60, 508, "ring"), (60, 910, "fill")]),
-                            (1398, 64, 330, [(1398, 64, "fill"), (1398, 330, "ring")]),
-                            (1424, 0, 190, [])]:
-    ax.plot([xx, xx], [y0, y1], color=TEAL, lw=0.9, zorder=3)
-    for (nx, ny, kind) in nodes:
-        if kind == "fill":
-            ax.add_patch(plt.Circle((nx, ny), 7, color=TEAL, zorder=4))
-        else:
-            ax.add_patch(plt.Circle((nx, ny), 6, fill=False, ec=TEAL, lw=1.2, zorder=4))
 
-# ---- Signature lines -----------------------------------------------------------------------
-ax.plot([365, 712], [857, 857], color=NAVY, lw=1.0, zorder=3)
-ax.plot([1053, 1423], [857, 857], color=NAVY, lw=1.0, zorder=3)
+def text_mask(img, boxes, thresh=225, grow=3):
+    gray = np.asarray(img.convert("L"))
+    mask = np.zeros(gray.shape, np.uint8)
+    for (x0, y0, x1, y1) in boxes:
+        region = gray[y0:y1, x0:x1] < thresh
+        mask[y0:y1, x0:x1][region] = 255
+    return cv2.dilate(mask, np.ones((2 * grow + 1, 2 * grow + 1), np.uint8))
 
-# ---- Title accent bar ----------------------------------------------------------------------
-ax.add_patch(plt.Rectangle((303, 302), 5, 93, color=TEAL, zorder=4, lw=0))
 
-fig.savefig(OUT, dpi=300, facecolor="white")
-plt.close(fig)
+def font(name, size_px):
+    return ImageFont.truetype(str(FONTS / name), max(4, int(round(size_px))))
 
-# ---- Logo (pasted at full resolution) -----------------------------------------------------------
-bg = Image.open(OUT).convert("RGB")
-px = bg.width / W
 
-# Feathered white veil behind the text block, so stray strands never cross the text
-from PIL import ImageDraw, ImageFilter
-mask = Image.new("L", bg.size, 0)
-ImageDraw.Draw(mask).rectangle([int(345 * px), int(290 * px), int(1300 * px), int(990 * px)], fill=235)
-mask = mask.filter(ImageFilter.GaussianBlur(int(45 * px)))
-bg = Image.composite(Image.new("RGB", bg.size, "white"), bg, mask)
-# keep the frame, accents and title bar crisp: redraw them over the veil
-crisp = Image.open(OUT).convert("RGB")
-mask2 = Image.new("L", bg.size, 0)
-d2 = ImageDraw.Draw(mask2)
-d2.rectangle([int(300 * px), int(300 * px), int(310 * px), int(397 * px)], fill=255)   # title bar
-d2.rectangle([int(360 * px), int(852 * px), int(717 * px), int(862 * px)], fill=255)    # signature lines
-d2.rectangle([int(1048 * px), int(852 * px), int(1428 * px), int(862 * px)], fill=255)
-bg = Image.composite(crisp, bg, mask2)
-logo = Image.open(LOGO).convert("RGBA")
-h = int(170 * px)
-logo = logo.resize((int(logo.width * h / logo.height), h), Image.LANCZOS)
-bg.paste(logo, (int(300 * px), int(96 * px)), logo)
-bg.save(OUT, optimize=True)
-print(OUT, bg.size)
+def fit_width(fontname, text, width_px):
+    lo, hi = 4.0, 600.0
+    for _ in range(40):
+        mid = (lo + hi) / 2
+        b = font(fontname, mid).getbbox(text)
+        lo, hi = (mid, hi) if (b[2] - b[0]) < width_px else (lo, mid)
+    return lo
+
+
+def fit_cap_height(fontname, cap_px):
+    lo, hi = 4.0, 600.0
+    for _ in range(40):
+        mid = (lo + hi) / 2
+        b = font(fontname, mid).getbbox("H")
+        lo, hi = (mid, hi) if (b[3] - b[1]) < cap_px else (lo, mid)
+    return lo
+
+
+def draw_tracked(draw, x, y_top, text, f, fill, total_width):
+    """Letter-spaced text filling exactly total_width, ink top at y_top."""
+    first = f.getbbox(text[0])[0]
+    last_ch = text[-1]
+    natural = sum(f.getlength(ch) for ch in text[:-1]) + f.getbbox(last_ch)[2] - first
+    gap = (total_width - natural) / (len(text) - 1)
+    top = f.getbbox("H")[1]
+    cx = x - first
+    for ch in text:
+        draw.text((cx, y_top - top), ch, font=f, fill=fill)
+        cx += f.getlength(ch) + gap
+
+
+def main():
+    design = Image.open(DESIGN).convert("RGB")
+    s = OUT_W / design.width
+
+    # ---- measure every text element before erasing
+    measured = [(measure(design, t[0]),) + t[1:] for t in TEXT]
+    name_box = measure(design, NAME_BOX)
+    id_box = measure(design, IDLINE_BOX)
+
+    # ---- erase text and logo, keep the artwork
+    erase = [t[0] for t in TEXT] + [NAME_BOX, IDLINE_BOX]
+    mask = text_mask(design, erase)
+    gray = np.asarray(design.convert("L"))
+    lx0, ly0, lx1, ly1 = LOGO_BOX
+    logo_region = (gray[ly0:ly1, lx0:lx1] < 245).astype(np.uint8) * 255
+    mask[ly0:ly1, lx0:lx1] = np.maximum(mask[ly0:ly1, lx0:lx1],
+                                        cv2.dilate(logo_region, np.ones((7, 7), np.uint8)))
+    clean = cv2.inpaint(cv2.cvtColor(np.asarray(design), cv2.COLOR_RGB2BGR), mask, 5, cv2.INPAINT_TELEA)
+    clean = Image.fromarray(cv2.cvtColor(clean, cv2.COLOR_BGR2RGB))
+    # the design's paper is a slightly textured off-white (247-255): lift it to clean white,
+    # which prints crisply and hides any seams from the erased text
+    clean = clean.point(lambda v: min(255, int(v * 255 / 246)))
+
+    # the text sits on near-white paper: whiten those areas fully so no smudges remain
+    veil = Image.new("L", clean.size, 0)
+    vd = ImageDraw.Draw(veil)
+    for (x0, y0, x1, y1) in erase + [LOGO_BOX, QR_BOX]:
+        vd.rectangle([x0 - 4, y0 - 4, x1 + 4, y1 + 4], fill=255)
+    veil = veil.filter(ImageFilter.GaussianBlur(3))
+    clean = Image.composite(Image.new("RGB", clean.size, "white"), clean, veil)
+
+    # ---- upscale to print resolution
+    bg = clean.resize((OUT_W, OUT_H), Image.LANCZOS).filter(
+        ImageFilter.UnsharpMask(radius=2, percent=60, threshold=2))
+    d = ImageDraw.Draw(bg)
+
+    # ---- crisp logo in the same place and size
+    logo = Image.open(LOGO).convert("RGBA")
+    lb = measure(design, LOGO_BOX, thresh=245)
+    scale = min((lb[2] - lb[0]) * s / logo.width, (lb[3] - lb[1]) * s / logo.height)
+    logo = logo.resize((int(logo.width * scale), int(logo.height * scale)), Image.LANCZOS)
+    bg.paste(logo, (int(lb[0] * s), int(lb[1] * s)), logo)
+
+    # ---- crisp fixed text, matched to the design
+    for (box, orig, new, fontname, colour, align, tracked) in measured:
+        x0, y0, x1, y1 = [v * s for v in box]
+        if tracked:
+            f = font(fontname, fit_cap_height(fontname, y1 - y0))
+            draw_tracked(d, x0, y0, new, f, colour, x1 - x0)
+            continue
+        f = font(fontname, fit_width(fontname, orig, x1 - x0))
+        b, ref = f.getbbox(new), f.getbbox(orig)
+        x = x0 - b[0] if align == "left" else (x0 + x1) / 2 - (b[2] - b[0]) / 2 - b[0]
+        d.text((x, y0 - ref[1]), new, font=f, fill=colour)
+
+    # caption under the QR code
+    f = font("GOTHIC.TTF", 13 * s)
+    cap = "Scan to verify"
+    d.text(((QR_BOX[0] + QR_BOX[2]) / 2 * s - f.getlength(cap) / 2, QR_CAPTION_Y * s), cap, font=f, fill=GREY)
+
+    out = HERE / "certificate-background.png"
+    bg.save(out, optimize=True)
+
+    # ---- slots for the dynamic content, in points (Code.gs) — the preview uses the same file
+    pt = PAGE_W_PT / design.width
+    id_font = fit_width("GOTHIC.TTF", "Certificate ID: NDC-TR-2026-001 · Verify at contact@neu-data.com",
+                        (id_box[2] - id_box[0]))
+    layout = {
+        "page": {"w": PAGE_W_PT, "h": PAGE_H_PT},
+        "name": {"x": round(name_box[0] * pt, 1), "y": round(name_box[1] * pt, 1),
+                 "w": round((QR_BOX[0] - 25 - name_box[0]) * pt, 1),
+                 "h": round((name_box[3] - name_box[1]) * pt, 1),
+                 "size": round(fit_width("BOD_R.TTF", "Participant Name", name_box[2] - name_box[0]) * pt, 1)},
+        "idline": {"x": round((id_box[0] - 70) * pt, 1), "y": round(id_box[1] * pt, 1),
+                   "w": round((id_box[2] - id_box[0] + 140) * pt, 1), "h": round((id_box[3] - id_box[1]) * pt, 1),
+                   "size": round(id_font * pt, 1)},
+        "qr": {"x": round(QR_BOX[0] * pt, 1), "y": round(QR_BOX[1] * pt, 1), "size": round((QR_BOX[2] - QR_BOX[0]) * pt, 1)},
+    }
+    (HERE / "layout.json").write_text(json.dumps(layout, indent=2), encoding="utf-8")
+    print(out, bg.size)
+    print(json.dumps(layout))
+
+
+if __name__ == "__main__":
+    main()
