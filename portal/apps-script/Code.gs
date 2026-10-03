@@ -52,8 +52,8 @@ const LAYOUT = {
   name:   { x: 193.3, y: 266, w: 505, h: 66, font: 'DM Serif Display', size: 40, color: '#04242F' },
   idline: { x: 290, y: 532, w: 433, h: 20, font: 'Montserrat', size: 8.5, color: '#808C96', center: true },
   qr:     { x: 712.1, y: 268.6, size: 62.1 },
-  // signature images: centred on each signature line, bottom edge just above it
-  signatures: [{ cx: 303.6, bottom: 481.9, maxw: 150, maxh: 46 }, { cx: 698.6, bottom: 481.9, maxw: 150, maxh: 46 }],
+  // signature images: centred on each signature line (at y 483.6), resting on it
+  signatures: [{ cx: 303.6, bottom: 486, maxw: 150, maxh: 44 }, { cx: 698.6, bottom: 490, maxw: 150, maxh: 62 }],
 };
 
 // ===== Web app entry point ==============================================================
