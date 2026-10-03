@@ -32,7 +32,7 @@ const CONFIG = {
   // Signatures are kept only in Drive, never in the public repository. If the file is missing,
   // the certificate is issued without that signature.
   signatories: [
-    { name: 'My Luong Vuong', title: 'Lead Trainer, Senior Biostatistician', signature: 'signature-my-luong.png' },
+    { name: 'Vương Mỹ Lượng', title: 'Lead Trainer, Senior Biostatistician', signature: 'signature-my-luong.png' },
     { name: "Bernard Isekah Osang'ir", title: 'Trainer, Senior Biostatistician', signature: 'signature-bernard.png' },
   ],
 

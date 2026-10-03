@@ -41,12 +41,12 @@ TEXT = [
      "GOTHICB.TTF", BLUE, "left", False),
     ((345, 720, 1280, 762), "5 online sessions · 7.5 contact hours · 8 September – 6 October 2026 · Online",
      "5 online sessions · 7.5 contact hours · 8 September – 6 October 2026 · Online", "GOTHIC.TTF", NAVY, "left", False),
-    ((440, 872, 620, 906), "Signatory Name", "My Luong Vuong", "GOTHICB.TTF", NAVY, "center", False),
+    ((440, 872, 620, 906), "Signatory Name", "Vương Mỹ Lượng", "segoeuib.ttf", NAVY, "center", False),
     ((385, 905, 690, 934), "Lead Trainer, Senior Biostatistician", "Lead Trainer, Senior Biostatistician",
      "GOTHIC.TTF", GREY, "center", False),
     ((838, 864, 908, 890), "Issued", "Issued", "GOTHIC.TTF", GREY, "center", False),
     ((805, 893, 942, 926), "06-10-2026", "06-10-2026", "GOTHICB.TTF", NAVY, "center", False),
-    ((1145, 874, 1325, 908), "Signatory Name", "Bernard Isekah Osang'ir", "GOTHICB.TTF", NAVY, "center", False),
+    ((1145, 874, 1325, 908), "Signatory Name", "Bernard Isekah Osang'ir", "segoeuib.ttf", NAVY, "center", False),
     ((1112, 906, 1375, 936), "Trainer, Senior Biostatistician", "Trainer, Senior Biostatistician",
      "GOTHIC.TTF", GREY, "center", False),
     ((720, 970, 1080, 998), "Neudata Consulting Ltd · www.neu-data.com", "Neudata Consulting Ltd · www.neu-data.com",
@@ -56,7 +56,7 @@ TEXT = [
 ]
 SCALE = {
     "5 online sessions · 7.5 contact hours · 8 September – 6 October 2026 · Online": (1.08, -2),
-    "My Luong Vuong": (1.3, 0),
+    "Vương Mỹ Lượng": (1.3, 0),
     "Bernard Isekah Osang'ir": (1.3, 0),
     "Lead Trainer, Senior Biostatistician": (1.22, 9),
     "Trainer, Senior Biostatistician": (1.22, 7),
@@ -209,8 +209,9 @@ def main():
                    "size": round(id_font * pt, 1)},
         "qr": {"x": round(QR_BOX[0] * pt, 1), "y": round(QR_BOX[1] * pt, 1), "size": round((QR_BOX[2] - QR_BOX[0]) * pt, 1)},
         # signature images: centred on each signature line, bottom just above it
-        "signatures": [{"cx": round((x0 + x1) / 2 * pt, 1), "bottom": round((y - 3) * pt, 1),
-                        "maxw": 150, "maxh": 46} for (y, x0, x1) in SIG_LINES],
+        # (sizes tuned to the two trainers' signatures; keep in step with LAYOUT in Code.gs)
+        "signatures": [{"cx": round((x0 + x1) / 2 * pt, 1), "bottom": b, "maxw": 150, "maxh": h}
+                       for (y, x0, x1), b, h in zip(SIG_LINES, (486, 490), (44, 62))],
     }
     (HERE / "layout.json").write_text(json.dumps(layout, indent=2), encoding="utf-8")
 

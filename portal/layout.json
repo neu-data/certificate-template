@@ -25,15 +25,15 @@
   "signatures": [
     {
       "cx": 303.6,
-      "bottom": 481.9,
+      "bottom": 486,
       "maxw": 150,
-      "maxh": 46
+      "maxh": 44
     },
     {
       "cx": 698.6,
-      "bottom": 481.9,
+      "bottom": 490,
       "maxw": 150,
-      "maxh": 46
+      "maxh": 62
     }
   ]
 }
