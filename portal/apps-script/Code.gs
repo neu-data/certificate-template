@@ -39,7 +39,7 @@ const CONFIG = {
   senderName: 'Neudata Consulting Ltd',
   replyTo: 'contact@neu-data.com',
   sendAs: 'contact@neu-data.com',                     // used only if added as a Gmail "Send mail as" alias
-  resendCooldownMinutes: 10,                          // stops repeated clicks from flooding an inbox
+  resendCooldownMinutes: 1,                           // stops double clicks sending two emails
 };
 
 // The background (portal/certificate-background.png) already carries the artwork, logo and
@@ -229,6 +229,8 @@ function generateCertificate(email, name, loginCode, lang) {
       if (lastSent && (Date.now() - new Date(lastSent).getTime()) < CONFIG.resendCooldownMinutes * 60000) {
         return { ok: true, code: 'RECENTLY_SENT', id: id, email: data[idx][2] };
       }
+      // Regenerating keeps the same certificate ID; the name entered now replaces the old one.
+      sheet.getRange(row, 4).setValue(name);
     } else {
       id = newId_(data);
       sheet.appendRow([id, key, email, name, new Date(), '', '', 'reserved']);
@@ -240,19 +242,18 @@ function generateCertificate(email, name, loginCode, lang) {
 
   const record = sheet.getRange(row, 1, 1, 8).getValues()[0];
   const sendTo = existing ? record[2] : email;          // always the address on record
-  let pdf;
+  // Always build a fresh PDF, so a regenerated certificate has the current design and
+  // signatures. The previous PDF is moved to the Drive bin (recoverable for 30 days).
+  const file = buildPdf_(id, record[3]);
   if (existing && record[6]) {
-    pdf = DriveApp.getFileById(fileIdFromUrl_(record[6])).getBlob();
-  } else {
-    const file = buildPdf_(id, record[3]);
-    sheet.getRange(row, 7).setValue(file.getUrl());
-    pdf = file.getBlob();
+    try { DriveApp.getFileById(fileIdFromUrl_(record[6])).setTrashed(true); } catch (e) {}
   }
+  sheet.getRange(row, 7).setValue(file.getUrl());
 
-  sendEmail_(sendTo, record[3], id, pdf, lang);
+  sendEmail_(sendTo, record[3], id, file.getBlob(), lang);
   sheet.getRange(row, 6).setValue(new Date());
   sheet.getRange(row, 8).setValue('sent');
-  return { ok: true, code: existing ? 'RESENT' : 'SENT', id: id, email: sendTo };
+  return { ok: true, code: existing ? 'REGENERATED' : 'SENT', id: id, email: sendTo };
 }
 
 // ===== Certificate IDs ==========================================================================

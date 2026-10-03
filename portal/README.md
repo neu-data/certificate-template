@@ -84,9 +84,9 @@ Requires Python with Pillow, OpenCV, NumPy and `qrcode` (`pip install pillow ope
 ## Rules built in
 
 - **Unique IDs:** `NDC-TR-2026-1-10XX-NNN` — `XX` is random for each participant and `NNN` is a running number, so two people can never get the same ID. Generation is locked so simultaneous clicks cannot collide.
-- **One certificate per person:** logging in again re-sends the same certificate and ID; the name cannot be changed. To correct a name, delete that person's row in the register and their PDF, then ask them to generate again.
+- **One certificate ID per person, regenerate any time:** logging in again builds a fresh PDF with the *same* ID, using the current design and signatures and the name entered this time (so participants can fix a typo). The previous PDF goes to the Drive bin.
 - **Proof of email ownership:** the 6-digit code (valid 15 minutes, one per minute) means nobody can claim a certificate with someone else's email.
-- **No flooding:** a certificate is not re-sent more than once every 10 minutes.
+- **No flooding:** each attempt needs a new emailed login code (one per minute), and a certificate is not re-sent twice within a minute.
 - **Limits:** a personal Gmail account can send about 100 emails a day through Apps Script — plenty for a course cohort.
 
 ## Privacy
