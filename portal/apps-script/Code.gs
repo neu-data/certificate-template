@@ -442,8 +442,9 @@ function doPost(e) {
   let out;
   try {
     const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    if (req.action === 'request') out = requestAccessCode_(String(req.email || ''), req.lang === 'vi' ? 'vi' : 'en');
-    else if (req.action === 'verify') out = verifyAccessCode_(String(req.code || ''));
+    const meta = accessMeta_(req);
+    if (req.action === 'request') out = requestAccessCode_(String(req.email || ''), req.lang === 'vi' ? 'vi' : 'en', meta);
+    else if (req.action === 'verify') out = verifyAccessCode_(String(req.code || ''), meta);
     else out = { ok: false, code: 'BAD_REQUEST' };
   } catch (err) {
     Logger.log(err);
@@ -452,7 +453,14 @@ function doPost(e) {
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
 
-function requestAccessCode_(email, lang) {
+// Where the visitor is (approximately): browser time zone and language, plus country and city
+// looked up in the visitor's browser (GeoJS). The IP address itself is never sent or stored.
+function accessMeta_(req) {
+  const clean = function (v) { return String(v || '').replace(/[^\p{L}\p{N}\s/_.,()'-]/gu, '').trim().slice(0, 60); };
+  return { tz: clean(req.tz), blang: clean(req.blang), country: clean(req.country), city: clean(req.city) };
+}
+
+function requestAccessCode_(email, lang, meta) {
   email = email.trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200) return { ok: false, code: 'BAD_EMAIL' };
   const cache = CacheService.getScriptCache();
@@ -473,7 +481,7 @@ function requestAccessCode_(email, lang) {
       for (let i = 0; i < 8; i++) code += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
       code = code.slice(0, 4) + '-' + code.slice(4);
     } while (used.has(code));
-    sheet.appendRow([code, new Date(), lang, 0, '']);
+    sheet.appendRow([code, new Date(), lang, 0, '', meta.tz, meta.blang, meta.country, meta.city]);
   } finally {
     lock.releaseLock();
   }
@@ -503,7 +511,7 @@ function requestAccessCode_(email, lang) {
   return { ok: true, code: 'CODE_SENT' };
 }
 
-function verifyAccessCode_(code) {
+function verifyAccessCode_(code, meta) {
   code = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (code.length !== 8) return { ok: false, code: 'BAD_CODE' };
   code = code.slice(0, 4) + '-' + code.slice(4);
@@ -519,6 +527,9 @@ function verifyAccessCode_(code) {
       try {
         sheet.getRange(row, 4).setValue((Number(sheet.getRange(row, 4).getValue()) || 0) + 1);
         sheet.getRange(row, 5).setValue(new Date());
+        // fill in the location if it was not known when the code was requested
+        const loc = sheet.getRange(row, 6, 1, 4).getValues()[0];
+        if (meta && !loc[0] && !loc[2]) sheet.getRange(row, 6, 1, 4).setValues([[meta.tz, meta.blang, meta.country, meta.city]]);
       } finally {
         lock.releaseLock();
       }
@@ -532,7 +543,7 @@ function verifyAccessCode_(code) {
 function accessSheet_() {
   const props = PropertiesService.getScriptProperties();
   const id = props.getProperty('ACCESS_LOG_ID');
-  if (id) return SpreadsheetApp.openById(id).getSheetByName('Codes');
+  if (id) return upgradeAccessSheet_(SpreadsheetApp.openById(id));
   const ss = SpreadsheetApp.create(CONFIG.accessLogName);
   const codes = ss.getSheets()[0].setName('Codes');
   codes.appendRow(['Access code', 'Created', 'Language', 'Times used', 'Last used']).setFrozenRows(1);
@@ -551,6 +562,23 @@ function accessSheet_() {
   ss.setActiveSheet(sum);
   DriveApp.getFileById(ss.getId()).moveTo(DriveApp.getFolderById(props.getProperty('ROOT_ID')));
   props.setProperty('ACCESS_LOG_ID', ss.getId());
+  return upgradeAccessSheet_(ss);
+}
+
+// Adds the location columns and the "by country" / "by time zone" tables (once).
+function upgradeAccessSheet_(ss) {
+  const codes = ss.getSheetByName('Codes');
+  if (codes.getRange(1, 6).getValue() === 'Time zone') return codes;
+  codes.getRange(1, 6, 1, 4).setValues([['Time zone', 'Browser language', 'Country', 'City']]);
+  const sum = ss.getSheetByName('Summary');
+  sum.getRange('A7:B7').setValues([['Note', 'Email and IP addresses are never stored; each row is one generated code. ' +
+    'Country and city come from the visitor\'s browser (GeoJS lookup); time zone and language from browser settings.']]);
+  sum.getRange('A9').setValue('Codes by country').setFontWeight('bold');
+  sum.getRange('A10').setFormula(`=IFERROR(QUERY(Codes!A2:I,"select H, count(A) where A is not null group by H order by count(A) desc label H 'Country', count(A) 'Codes'",0),"")`);
+  sum.getRange('D9').setValue('Codes by city').setFontWeight('bold');
+  sum.getRange('D10').setFormula(`=IFERROR(QUERY(Codes!A2:I,"select I, H, count(A) where A is not null group by I, H order by count(A) desc label I 'City', H 'Country', count(A) 'Codes'",0),"")`);
+  sum.getRange('H9').setValue('Codes by time zone').setFontWeight('bold');
+  sum.getRange('H10').setFormula(`=IFERROR(QUERY(Codes!A2:I,"select F, count(A) where A is not null group by F order by count(A) desc label F 'Time zone', count(A) 'Codes'",0),"")`);
   return codes;
 }
 
