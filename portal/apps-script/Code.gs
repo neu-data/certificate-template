@@ -40,6 +40,13 @@ const CONFIG = {
   replyTo: 'contact@neu-data.com',
   sendAs: 'contact@neu-data.com',                     // used only if added as a Gmail "Send mail as" alias
   resendCooldownMinutes: 1,                           // stops double clicks sending two emails
+
+  // Final-assignment submissions (page: <web app URL>?page=submit)
+  assignmentTo: 'myluong1710@gmail.com',              // the lead trainer receives every submission
+  assignmentFolderName: 'Assignment submissions',     // inside the root folder; a copy of every file
+  assignmentLogName: 'Assignment submission log',     // Google Sheet: one row per submission
+  assignmentMaxMB: 20,                                // larger files are refused (email attachments ≤ 25 MB)
+  assignmentTypes: ['zip', 'r', 'rmd', 'qmd', 'html', 'pdf', 'docx', 'xlsx', 'csv', 'png'],
 };
 
 // The background (portal/certificate-background.png) already carries the artwork, logo and
@@ -63,6 +70,16 @@ function doGet(e) {
     const t = HtmlService.createTemplateFromFile('Verify');
     t.result = verifyCertificate_(String(params.verify));
     return t.evaluate().setTitle('Verify certificate · Neudata')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+  if (params.page === 'submit') {
+    const s = HtmlService.createTemplateFromFile('Submit');
+    s.lang = params.lang === 'vi' || params.lang === 'en' ? params.lang : '';
+    s.maxMB = CONFIG.assignmentMaxMB;
+    s.types = CONFIG.assignmentTypes.map(function (x) { return '.' + x; }).join(',');
+    return s.evaluate()
+      .setTitle('Submit your final assignment · Neudata')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
@@ -408,6 +425,138 @@ function verifyCertificate_(id) {
   const r = data.find(function (row, i) { return i > 0 && String(row[0]).toUpperCase() === id; });
   if (!r || r[7] !== 'sent') return { valid: false, id: id };
   return { valid: true, id: r[0], name: r[3], course: CONFIG.course, issued: CONFIG.issued };
+}
+
+// ===== Final-assignment submissions ======================================================================
+/**
+ * Called from the Submit page. `form` is the HTML form element: google.script.run turns the
+ * file input into a Blob. Saves the file in Drive, logs it, emails it to the lead trainer
+ * (reply-to = participant) and sends the participant a receipt.
+ * @return {{ok:boolean, code:string, id?:string}}
+ */
+function submitAssignment(form) {
+  const lang = form.lang === 'vi' ? 'vi' : 'en';
+  const name = String(form.name || '').replace(/\s+/g, ' ').trim();
+  const email = String(form.email || '').trim();
+  const note = String(form.note || '').trim().slice(0, 2000);
+  const file = form.file;
+  if (!/^[\p{L}\p{M}][\p{L}\p{M}'’.\- ]{1,79}$/u.test(name) || name.split(' ').length < 2) return { ok: false, code: 'BAD_NAME' };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, code: 'BAD_EMAIL' };
+  if (String(form.own) !== 'yes') return { ok: false, code: 'NEED_CONFIRM' };
+  if (!file || typeof file.getBytes !== 'function' || !file.getName()) return { ok: false, code: 'NO_FILE' };
+  const ext = (file.getName().split('.').pop() || '').toLowerCase();
+  if (CONFIG.assignmentTypes.indexOf(ext) < 0) return { ok: false, code: 'BAD_TYPE' };
+  const bytes = file.getBytes().length;
+  if (bytes === 0) return { ok: false, code: 'NO_FILE' };
+  if (bytes > CONFIG.assignmentMaxMB * 1024 * 1024) return { ok: false, code: 'TOO_BIG' };
+
+  const cache = CacheService.getScriptCache();
+  const key = 'submit:' + normalizeEmail_(email);
+  if (cache.get(key)) return { ok: false, code: 'TOO_SOON' };
+  cache.put(key, '1', 60);                                       // one submission per minute per email
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(60000);
+  let id, saved, log;
+  try {
+    log = assignmentLog_();
+    id = 'ASG-' + Utilities.formatDate(new Date(), 'Asia/Ho_Chi_Minh', 'yyyyMMdd') + '-' +
+         String(log.getLastRow()).padStart(3, '0');
+    const folder = assignmentFolder_();
+    saved = folder.createFile(file.setName(id + '_' + slug_(name) + '_' + file.getName()));
+    log.appendRow([id, new Date(), name, email, file.getName(), Math.round(bytes / 1024), saved.getUrl(), note, '']);
+  } finally {
+    lock.releaseLock();
+  }
+  const row = log.getLastRow();
+
+  // To the lead trainer (attachment; reply goes straight to the participant)
+  const html =
+    '<div style="font-family:Segoe UI,Arial,sans-serif;color:#1F2D33;max-width:600px">' +
+    '<div style="background:#04242F;border-bottom:4px solid #055F56;padding:14px 18px;color:#fff;font-weight:700">' +
+    'Final assignment submission · ' + esc_(CONFIG.course) + '</div><div style="padding:18px">' +
+    '<p><b>Submission:</b> ' + esc_(id) + '<br><b>Participant:</b> ' + esc_(name) + ' &lt;' + esc_(email) + '&gt;<br>' +
+    '<b>File:</b> ' + esc_(file.getName()) + ' (' + Math.round(bytes / 1024) + ' KB)<br>' +
+    '<b>Received:</b> ' + Utilities.formatDate(new Date(), 'Asia/Ho_Chi_Minh', 'dd-MM-yyyy HH:mm') + ' (Vietnam time)</p>' +
+    (note ? '<p><b>Message from the participant:</b><br>' + esc_(note).replace(/\n/g, '<br>') + '</p>' : '') +
+    '<p>The file is attached and saved in Google Drive: <a href="' + saved.getUrl() + '">open in Drive</a>. ' +
+    'Reply to this email to answer the participant.</p></div></div>';
+  GmailApp.sendEmail(CONFIG.assignmentTo, 'Final assignment: ' + name + ' (' + id + ')',
+    html.replace(/<[^>]+>/g, ' '),
+    { htmlBody: html, attachments: [saved.getBlob()], name: CONFIG.senderName, replyTo: email });
+
+  // Receipt to the participant
+  const T = lang === 'vi' ? {
+    subject: 'Đã nhận bài tập cuối khóa — ' + id,
+    body: 'Kính gửi ' + name + ',</p><p>Chúng tôi đã nhận bài tập cuối khóa của bạn và chuyển đến giảng viên chính.',
+    file: 'Tệp', code: 'Mã bài nộp', thanks: 'Trân trọng,',
+    again: 'Nếu cần nộp lại, hãy dùng cùng trang nộp bài; giảng viên sẽ xem bài nộp mới nhất.',
+  } : {
+    subject: 'Final assignment received — ' + id,
+    body: 'Dear ' + name + ',</p><p>We have received your final assignment and passed it to the lead trainer.',
+    file: 'File', code: 'Submission number', thanks: 'With best wishes,',
+    again: 'If you need to resubmit, use the same page; the trainer will mark your latest submission.',
+  };
+  const receipt =
+    '<div style="font-family:Segoe UI,Arial,sans-serif;color:#1F2D33;max-width:560px">' +
+    '<div style="background:#04242F;border-bottom:4px solid #055F56;padding:14px 18px;color:#fff;font-weight:700">' +
+    'Neudata Consulting Ltd</div><div style="padding:18px"><p>' + T.body + '</p>' +
+    '<p><b>' + T.code + ':</b> ' + esc_(id) + '<br><b>' + T.file + ':</b> ' + esc_(file.getName()) + '</p>' +
+    '<p>' + T.again + '</p><p>' + T.thanks + '<br>' + esc_(CONFIG.signatories[0].name) + ' &amp; ' +
+    esc_(CONFIG.signatories[1].name) + '<br>Neudata Consulting Ltd</p></div></div>';
+  try {
+    GmailApp.sendEmail(email, T.subject, receipt.replace(/<[^>]+>/g, ' '),
+      { htmlBody: receipt, name: CONFIG.senderName, replyTo: CONFIG.assignmentTo });
+  } catch (e) {
+    Logger.log('Receipt not sent to %s: %s', email, e);
+  }
+  log.getRange(row, 9).setValue('sent to ' + CONFIG.assignmentTo);
+  return { ok: true, code: 'SUBMITTED', id: id };
+}
+
+function assignmentFolder_() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('ASSIGNMENT_FOLDER_ID');
+  if (id) return DriveApp.getFolderById(id);
+  const root = DriveApp.getFolderById(props.getProperty('ROOT_ID'));
+  const folder = folder_(root, CONFIG.assignmentFolderName);
+  props.setProperty('ASSIGNMENT_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+function assignmentLog_() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('ASSIGNMENT_LOG_ID');
+  if (id) return SpreadsheetApp.openById(id).getSheets()[0];
+  const ss = SpreadsheetApp.create(CONFIG.assignmentLogName);
+  const sheet = ss.getSheets()[0].setName('Submissions');
+  sheet.appendRow(['Submission', 'Received', 'Name', 'Email', 'File', 'Size (KB)', 'Drive file', 'Message', 'Status'])
+    .setFrozenRows(1);
+  DriveApp.getFileById(ss.getId()).moveTo(assignmentFolder_());
+  props.setProperty('ASSIGNMENT_LOG_ID', ss.getId());
+  return sheet;
+}
+
+// Admin helper: run a full test submission, sent to YOUR address instead of the lead trainer.
+function testSubmitToMe() {
+  const me = Session.getEffectiveUser().getEmail();
+  CONFIG.assignmentTo = me;
+  const form = { lang: 'en', name: 'Test Participant', email: me, own: 'yes', note: 'Test submission — please ignore.',
+                 file: Utilities.newBlob('# test script\nsummary(cars)\n', 'text/plain', 'Test_Phase1_Assignment.R') };
+  CacheService.getScriptCache().remove('submit:' + normalizeEmail_(me));
+  const r = submitAssignment(form);
+  if (r.ok) {
+    const log = assignmentLog_();
+    log.getRange(log.getLastRow(), 9).setValue('TEST (sent to ' + me + ')');
+  }
+  Logger.log(JSON.stringify(r));
+}
+
+// Admin helper: create the submissions folder and log now (run once from the editor).
+function setupAssignments() {
+  assignmentFolder_();
+  assignmentLog_();
+  Logger.log('Submissions folder: %s', assignmentFolder_().getUrl());
 }
 
 // ===== Helpers ========================================================================================
