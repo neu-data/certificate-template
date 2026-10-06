@@ -47,6 +47,11 @@ const CONFIG = {
   assignmentLogName: 'Assignment submission log',     // Google Sheet: one row per submission
   assignmentMaxMB: 20,                                // larger files are refused (email attachments ≤ 25 MB)
   assignmentTypes: ['zip', 'r', 'rmd', 'qmd', 'html', 'pdf', 'docx', 'xlsx', 'csv', 'png'],
+
+  // Free access codes for the course materials (website access page). Only the codes and how
+  // often they are used are recorded — never the email addresses — so we can count users.
+  accessLogName: 'Course access codes',
+  accessPageUrl: 'https://neu-data.github.io/ClinicalDataAnalysisinR-Phase1/{lang}/access.html',
 };
 
 // The background (portal/certificate-background.png) already carries the artwork, logo and
@@ -425,6 +430,135 @@ function verifyCertificate_(id) {
   const r = data.find(function (row, i) { return i > 0 && String(row[0]).toUpperCase() === id; });
   if (!r || r[7] !== 'sent') return { valid: false, id: id };
   return { valid: true, id: r[0], name: r[3], course: CONFIG.course, issued: CONFIG.issued };
+}
+
+// ===== Free access codes for the course materials ========================================================
+// The course website calls this with fetch(): POST, body = JSON text
+//   {action: "request", email, lang}  -> emails a new code         -> {ok, code: "CODE_SENT"}
+//   {action: "verify",  code}         -> checks and counts the use  -> {ok, code: "OK"}
+// Emails are used only to send the code and are never stored (the 1-minute anti-flood key is a
+// hash kept in the cache). Each code is one row in the "Course access codes" sheet.
+function doPost(e) {
+  let out;
+  try {
+    const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    if (req.action === 'request') out = requestAccessCode_(String(req.email || ''), req.lang === 'vi' ? 'vi' : 'en');
+    else if (req.action === 'verify') out = verifyAccessCode_(String(req.code || ''));
+    else out = { ok: false, code: 'BAD_REQUEST' };
+  } catch (err) {
+    Logger.log(err);
+    out = { ok: false, code: 'ERROR' };
+  }
+  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function requestAccessCode_(email, lang) {
+  email = email.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200) return { ok: false, code: 'BAD_EMAIL' };
+  const cache = CacheService.getScriptCache();
+  const key = 'acc:' + Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, normalizeEmail_(email)));
+  if (cache.get(key)) return { ok: false, code: 'TOO_SOON' };
+  cache.put(key, '1', 60);
+
+  const sheet = accessSheet_();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  let code;
+  try {
+    const used = new Set(sheet.getRange(1, 1, Math.max(sheet.getLastRow(), 1), 1).getValues().map(function (r) { return r[0]; }));
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    do {
+      code = '';
+      for (let i = 0; i < 8; i++) code += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+      code = code.slice(0, 4) + '-' + code.slice(4);
+    } while (used.has(code));
+    sheet.appendRow([code, new Date(), lang, 0, '']);
+  } finally {
+    lock.releaseLock();
+  }
+
+  const url = CONFIG.accessPageUrl.replace('{lang}', lang);
+  const T = lang === 'vi' ? {
+    subject: 'Mã truy cập miễn phí — Phân tích Dữ liệu Lâm sàng bằng R',
+    hi: 'Xin chào,', line: 'Mã truy cập miễn phí của bạn vào tài liệu khóa học là:',
+    how: 'Nhập mã này trên trang truy cập để mở tài liệu:', open: 'Mở trang truy cập',
+    note: 'Tài liệu hoàn toàn miễn phí. Chúng tôi chỉ đếm số người sử dụng tài liệu; địa chỉ email của bạn không được lưu lại. Nếu quên mã, bạn có thể yêu cầu mã mới bất cứ lúc nào.',
+  } : {
+    subject: 'Your free access code — Clinical Data Analysis in R',
+    hi: 'Hello,', line: 'Your free access code for the course materials is:',
+    how: 'Enter it on the access page to open the materials:', open: 'Open the access page',
+    note: 'The materials are completely free. We only count how many people use them; your email address is not stored. If you forget your code, you can request a new one at any time.',
+  };
+  const html = '<div style="font-family:Segoe UI,Arial,sans-serif;color:#1F2D33;max-width:560px">' +
+    '<div style="background:#04242F;border-bottom:4px solid #055F56;padding:14px 18px;color:#fff;font-weight:700">' +
+    'Neudata Consulting Ltd</div><div style="padding:18px"><p>' + T.hi + '</p><p>' + T.line + '</p>' +
+    '<p style="font-size:28px;font-weight:700;letter-spacing:3px;color:#055F56;font-family:Consolas,monospace">' + code + '</p>' +
+    '<p>' + T.how + ' <a href="' + url + '">' + T.open + '</a></p>' +
+    '<p style="color:#5f6f78;font-size:13px">' + T.note + '</p>' +
+    '<p style="color:#8A99A3">Neudata Consulting Ltd · www.neu-data.com</p></div></div>';
+  const options = { htmlBody: html, name: CONFIG.senderName, replyTo: CONFIG.replyTo };
+  if (GmailApp.getAliases().indexOf(CONFIG.sendAs) >= 0) options.from = CONFIG.sendAs;
+  GmailApp.sendEmail(email, T.subject, T.line + ' ' + code + '\n' + T.how + ' ' + url, options);
+  return { ok: true, code: 'CODE_SENT' };
+}
+
+function verifyAccessCode_(code) {
+  code = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (code.length !== 8) return { ok: false, code: 'BAD_CODE' };
+  code = code.slice(0, 4) + '-' + code.slice(4);
+  const sheet = accessSheet_();
+  const n = sheet.getLastRow();
+  if (n < 2) return { ok: false, code: 'BAD_CODE' };
+  const codes = sheet.getRange(2, 1, n - 1, 1).getValues();
+  for (let i = 0; i < codes.length; i++) {
+    if (codes[i][0] === code) {
+      const row = i + 2;
+      const lock = LockService.getScriptLock();
+      lock.waitLock(30000);
+      try {
+        sheet.getRange(row, 4).setValue((Number(sheet.getRange(row, 4).getValue()) || 0) + 1);
+        sheet.getRange(row, 5).setValue(new Date());
+      } finally {
+        lock.releaseLock();
+      }
+      return { ok: true, code: 'OK' };
+    }
+  }
+  return { ok: false, code: 'BAD_CODE' };
+}
+
+// The "Course access codes" sheet: tab "Codes" (one row per code) and tab "Summary" (the counts).
+function accessSheet_() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('ACCESS_LOG_ID');
+  if (id) return SpreadsheetApp.openById(id).getSheetByName('Codes');
+  const ss = SpreadsheetApp.create(CONFIG.accessLogName);
+  const codes = ss.getSheets()[0].setName('Codes');
+  codes.appendRow(['Access code', 'Created', 'Language', 'Times used', 'Last used']).setFrozenRows(1);
+  const sum = ss.insertSheet('Summary');
+  sum.getRange('A1:B7').setValues([
+    ['Course materials — usage', ''],
+    ['Access codes generated (people requesting access)', '=COUNTA(Codes!A2:A)'],
+    ['Codes used at least once', '=COUNTIF(Codes!D2:D,">0")'],
+    ['Total unlocks (times a code was entered)', '=SUM(Codes!D2:D)'],
+    ['Codes generated in the last 7 days', '=COUNTIF(Codes!B2:B,">="&(TODAY()-7))'],
+    ['Codes generated in English / Vietnamese', '=COUNTIF(Codes!C2:C,"en")&" / "&COUNTIF(Codes!C2:C,"vi")'],
+    ['Note', 'Email addresses are never stored; each row is one generated code.'],
+  ]);
+  sum.getRange('A1').setFontWeight('bold').setFontSize(13);
+  sum.setColumnWidth(1, 380);
+  ss.setActiveSheet(sum);
+  DriveApp.getFileById(ss.getId()).moveTo(DriveApp.getFolderById(props.getProperty('ROOT_ID')));
+  props.setProperty('ACCESS_LOG_ID', ss.getId());
+  return codes;
+}
+
+// Admin helper: create the access-code sheet now and log its link.
+function setupAccessCodes() {
+  accessSheet_();
+  Logger.log('Access codes sheet: %s',
+    SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('ACCESS_LOG_ID')).getUrl());
 }
 
 // ===== Final-assignment submissions ======================================================================
