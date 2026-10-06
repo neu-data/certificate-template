@@ -42,7 +42,7 @@ const CONFIG = {
   resendCooldownMinutes: 1,                           // stops double clicks sending two emails
 
   // Final-assignment submissions (page: <web app URL>?page=submit)
-  assignmentTo: 'myluong1710@gmail.com',              // the lead trainer receives every submission
+  assignmentTo: 'b.osangir@gmail.com',                // receives every submission (file attached)
   assignmentFolderName: 'Assignment submissions',     // inside the root folder; a copy of every file
   assignmentLogName: 'Assignment submission log',     // Google Sheet: one row per submission
   assignmentMaxMB: 20,                                // larger files are refused (email attachments ≤ 25 MB)
@@ -488,14 +488,14 @@ function submitAssignment(form) {
   // Receipt to the participant
   const T = lang === 'vi' ? {
     subject: 'Đã nhận bài tập cuối khóa — ' + id,
-    body: 'Kính gửi ' + name + ',</p><p>Chúng tôi đã nhận bài tập cuối khóa của bạn và chuyển đến giảng viên chính.',
+    body: 'Kính gửi ' + name + ',</p><p>Chúng tôi đã nhận bài tập cuối khóa của bạn và chuyển đến các giảng viên.',
     file: 'Tệp', code: 'Mã bài nộp', thanks: 'Trân trọng,',
     again: 'Nếu cần nộp lại, hãy dùng cùng trang nộp bài; giảng viên sẽ xem bài nộp mới nhất.',
   } : {
     subject: 'Final assignment received — ' + id,
-    body: 'Dear ' + name + ',</p><p>We have received your final assignment and passed it to the lead trainer.',
+    body: 'Dear ' + name + ',</p><p>We have received your final assignment and passed it to the trainers.',
     file: 'File', code: 'Submission number', thanks: 'With best wishes,',
-    again: 'If you need to resubmit, use the same page; the trainer will mark your latest submission.',
+    again: 'If you need to resubmit, use the same page; the trainers will mark your latest submission.',
   };
   const receipt =
     '<div style="font-family:Segoe UI,Arial,sans-serif;color:#1F2D33;max-width:560px">' +
