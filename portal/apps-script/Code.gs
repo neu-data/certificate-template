@@ -41,6 +41,12 @@ const CONFIG = {
   sendAs: 'contact@neu-data.com',                     // used only if added as a Gmail "Send mail as" alias
   resendCooldownMinutes: 1,                           // stops double clicks sending two emails
 
+  // Participant feedback survey (Google Form, about 3 minutes; answers are anonymous). It must be
+  // completed before a certificate can be generated: the form's confirmation message shows this
+  // completion code, which the certificate page asks for. Change both together.
+  surveyUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSc6si0HLATTrUOayWTquPoTHDEcetL15qYjl_vFsKTRlxX-sQ/viewform',
+  surveyCode: 'NDC-SURVEY-2026',
+
   // Final-assignment submissions (page: <web app URL>?page=submit)
   assignmentTo: 'b.osangir@gmail.com',                // receives every submission (file attached)
   assignmentFolderName: 'Assignment submissions',     // inside the root folder; a copy of every file
@@ -90,6 +96,7 @@ function doGet(e) {
   }
   const t = HtmlService.createTemplateFromFile('Portal');
   t.lang = params.lang === 'vi' || params.lang === 'en' ? params.lang : '';   // ?lang=vi from the course site
+  t.surveyUrl = CONFIG.surveyUrl;
   return t.evaluate()
     .setTitle('Certificate · Clinical Data Analysis in R · Neudata')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
@@ -187,9 +194,13 @@ function box_(slide, L, text) {
  * Step 1 — check the email is on the list, then email a 6-digit login code.
  * The code proves the person owns the address, so nobody can claim someone else's certificate.
  */
-function requestCode(email, lang) {
+function requestCode(email, lang, surveyCode) {
   email = String(email || '').trim();
   lang = lang === 'vi' ? 'vi' : 'en';
+  // The feedback survey comes first: its confirmation page shows the completion code.
+  if (String(surveyCode || '').toUpperCase().replace(/\s+/g, '') !== CONFIG.surveyCode) {
+    return { ok: false, code: 'SURVEY_FIRST' };
+  }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, code: 'BAD_EMAIL' };
   const key = normalizeEmail_(email);
   if (!eligibleSet_().has(key)) return { ok: false, code: 'NOT_ELIGIBLE' };
