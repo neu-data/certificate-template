@@ -12,7 +12,7 @@
 // ===== Settings ======================================================================
 const CONFIG = {
   rootFolderName: 'Neudata Certificates',
-  eligibleFolderName: 'FCR Level 1 · Eligible participants',       // add <gmail-name>.txt per eligible person
+  eligibleFolderName: 'Eligible participants',       // add <gmail-name>.txt per eligible person
   issuedFolderName: 'FCR Level 1 · Issued certificates',           // a copy of every certificate is saved here
   registerName: 'FCR Level 1 · Certificate register',              // Google Sheet: one row per certificate
   templateName: 'FCR Level 1 · Certificate template (do not delete)',
@@ -108,7 +108,7 @@ function doGet(e) {
 function setup() {
   const props = PropertiesService.getScriptProperties();
   const root = folder_(DriveApp.getRootFolder(), CONFIG.rootFolderName);
-  const eligible = folder_(root, CONFIG.eligibleFolderName);
+  const eligible = root;                              // eligibility comes from the registration list
   const issued = folder_(root, CONFIG.issuedFolderName);
   const work = folder_(root, '_working (temporary)');
 
@@ -128,6 +128,7 @@ function setup() {
     WORK_ID: work.getId(), REGISTER_ID: register.getId(),
   });
   props.setProperty('TEMPLATE_ID', createTemplate_(root).getId());
+  setupRegistration_(root);
   Logger.log('Setup complete. Folder: %s', root.getUrl());
   Logger.log('Now deploy: Deploy > New deployment > Web app (Execute as: Me, Who has access: Anyone).');
 }
@@ -203,7 +204,8 @@ function requestCode(email, lang, surveyCode) {
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, code: 'BAD_EMAIL' };
   const key = normalizeEmail_(email);
-  if (!eligibleSet_().has(key)) return { ok: false, code: 'NOT_ELIGIBLE' };
+  const status = eligibility_(key);                  // registration list (Registration.gs)
+  if (status !== 'OK') return { ok: false, code: status };
 
   const cache = CacheService.getScriptCache();
   if (cache.get('throttle:' + key)) return { ok: true, code: 'CODE_ALREADY_SENT' };
@@ -241,7 +243,8 @@ function generateCertificate(email, name, loginCode, lang) {
     return { ok: false, code: 'BAD_NAME' };
   }
   const key = normalizeEmail_(email);
-  if (!eligibleSet_().has(key)) return { ok: false, code: 'NOT_ELIGIBLE' };
+  const status = eligibility_(key);
+  if (status !== 'OK') return { ok: false, code: status };
   const cache = CacheService.getScriptCache();
   const expected = cache.get('code:' + key);
   if (!expected || String(loginCode || '').trim() !== expected) return { ok: false, code: 'BAD_CODE' };
@@ -307,7 +310,7 @@ function newId_(data) {
 // Each file in "Eligible participants" names one person:
 //   b.osangir.txt              -> b.osangir@gmail.com   (no @ means @gmail.com)
 //   jane.doe@hospital.org.txt  -> jane.doe@hospital.org
-function eligibleSet_() {
+function eligibleSetFromFiles_() {                 // not used here: see eligibleSet_ in Registration.gs
   const props = PropertiesService.getScriptProperties();
   const files = DriveApp.getFolderById(props.getProperty('ELIGIBLE_ID')).getFiles();
   const set = new Set();
@@ -771,7 +774,7 @@ function esc_(s) {
 function testIssueToMe() {
   const me = Session.getEffectiveUser().getEmail();
   const key = normalizeEmail_(me);
-  if (!eligibleSet_().has(key)) throw new Error('Add ' + me.split('@')[0] + '.txt to Eligible participants first');
+  if (!eligibleSet_().has(key)) throw new Error('Run addMeToEligibleList first');
   CacheService.getScriptCache().put('code:' + key, '123456', 300);
   Logger.log(JSON.stringify(generateCertificate(me, 'Test Participant', '123456', 'en')));
 }
@@ -802,7 +805,7 @@ function voidMyCertificate() {
 }
 
 // Admin helper: put your own address on the eligible list (creates "<gmail name>.txt").
-function addMeToEligibleList() {
+function addMeToEligibleListFiles_() {             // not used here: see Registration.gs
   const me = Session.getEffectiveUser().getEmail();
   const folder = DriveApp.getFolderById(PropertiesService.getScriptProperties().getProperty('ELIGIBLE_ID'));
   const name = (me.endsWith('@' + CONFIG.defaultDomain) ? me.split('@')[0] : me) + '.txt';
