@@ -1,6 +1,7 @@
 """Preview a finished certificate with sample data, using the same slots as the portal.
 
     python portal/preview.py "Nguyễn Thị Minh Phương"
+    python portal/preview.py "Nguyễn Thị Minh Phương" courses/fcr-level1     # another course
 
 Reads portal/certificate-background.png and portal/layout.json (both written by
 make_background.py) and writes portal/preview.png. In the real certificate the name
@@ -14,6 +15,8 @@ import qrcode
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = Path(__file__).parent
+if len(sys.argv) > 2:                             # another course: its folder holds the background
+    HERE = (HERE / sys.argv[2]).resolve()
 FONTS = Path("C:/Windows/Fonts")
 bg = Image.open(HERE / "certificate-background.png").convert("RGB")
 L = json.loads((HERE / "layout.json").read_text(encoding="utf-8"))
@@ -23,7 +26,7 @@ NAVY, GREY = (4, 36, 47), (128, 140, 150)
 NAME_PT = 40                                      # LAYOUT.name.size in Code.gs
 
 name = sys.argv[1] if len(sys.argv) > 1 else "Participant Name"
-cert_id = "NDC-TR-2026-1-1047-001"
+cert_id = sys.argv[3] if len(sys.argv) > 3 else "NDC-TR-2026-1-1047-001"
 verify_url = f"https://script.google.com/macros/s/EXAMPLE/exec?verify={cert_id}"
 
 

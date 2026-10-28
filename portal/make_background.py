@@ -1,6 +1,7 @@
 """Build the certificate background from the approved design.
 
-    python portal/make_background.py
+    python portal/make_background.py                         # this portal (Clinical Data Analysis in R)
+    python portal/make_background.py courses/fcr-level1      # another course: its folder holds course.json
 
 Source: portal/design/certificate-design.webp (the approved mock-up, 1492 x 1054).
 1. Every piece of text and the logo are erased from the design (inpainting), keeping the
@@ -11,9 +12,11 @@ Source: portal/design/certificate-design.webp (the approved mock-up, 1492 x 1054
 
 The participant name, certificate ID and QR code are added later by the portal (Code.gs).
 Writes portal/certificate-background.png and portal/layout.json (the boxes for those
-three items, in points, used by Code.gs and preview.py).
+three items, in points, used by Code.gs and preview.py). For another course, the printed text
+comes from "background" in <course folder>/course.json, and the files are written there.
 """
 import json
+import sys
 from pathlib import Path
 
 import cv2
@@ -130,7 +133,17 @@ def draw_tracked(draw, x, y_top, text, f, fill, total_width):
         cx += f.getlength(ch) + gap
 
 
-def main():
+def apply_course(course_dir):
+    """Swap in another course's printed text: {"background": {"text": {old: new}, "scale": {new: [k, dy]}}}."""
+    global TEXT, SCALE
+    cfg = json.loads((course_dir / "course.json").read_text(encoding="utf-8")).get("background", {})
+    rep = cfg.get("text", {})
+    TEXT = [t[:2] + (rep.get(t[2], t[2]),) + t[3:] for t in TEXT]
+    SCALE = {rep.get(k, k): v for k, v in SCALE.items()}
+    SCALE.update({k: tuple(v) for k, v in cfg.get("scale", {}).items()})
+
+
+def main(out_dir=HERE):
     design = Image.open(DESIGN).convert("RGB")
     s = OUT_W / design.width
 
@@ -191,7 +204,7 @@ def main():
     cap = "Scan to verify"
     d.text(((QR_BOX[0] + QR_BOX[2]) / 2 * s - f.getlength(cap) / 2, QR_CAPTION_Y * s), cap, font=f, fill=GREY)
 
-    out = HERE / "certificate-background.png"
+    out = out_dir / "certificate-background.png"
     bg.save(out, optimize=True)
 
     # ---- slots for the dynamic content, in points (Code.gs) — the preview uses the same file
@@ -213,7 +226,7 @@ def main():
         "signatures": [{"cx": round((x0 + x1) / 2 * pt, 1), "bottom": b, "maxw": 150, "maxh": h}
                        for (y, x0, x1), b, h in zip(SIG_LINES, (486, 490), (44, 62))],
     }
-    (HERE / "layout.json").write_text(json.dumps(layout, indent=2), encoding="utf-8")
+    (out_dir / "layout.json").write_text(json.dumps(layout, indent=2), encoding="utf-8")
 
     # ---- A4 landscape PowerPoint holding the background. Code.gs converts it to Google Slides:
     # Slides cannot create an A4 page itself (new decks are always 16:9), but keeps an imported one.
@@ -223,10 +236,15 @@ def main():
     prs.slide_width, prs.slide_height = Pt(PAGE_W_PT), Pt(PAGE_H_PT)
     slide = prs.slides.add_slide(prs.slide_layouts[6])            # blank
     slide.shapes.add_picture(str(out), 0, 0, prs.slide_width, prs.slide_height)
-    prs.save(HERE / "certificate-template.pptx")
+    prs.save(out_dir / "certificate-template.pptx")
     print(out, bg.size)
     print(json.dumps(layout))
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1:
+        course = (HERE / sys.argv[1]).resolve()
+        apply_course(course)
+        main(course)
+    else:
+        main()

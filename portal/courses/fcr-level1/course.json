@@ -1,0 +1,55 @@
+{
+  "name": "Foundations of Clinical Research — Level 1",
+  "background": {
+    "text": {
+      "Clinical Data Analysis in R — Phase I": "Foundations of Clinical Research — Level 1",
+      "5 online sessions · 7.5 contact hours · 8 September – 6 October 2026 · Online": "8 online sessions · 24 contact hours · 1 November – 19 December 2026 · Online",
+      "06-10-2026": "11-01-2027"
+    },
+    "scale": {
+      "Foundations of Clinical Research — Level 1": [0.9, 3],
+      "8 online sessions · 24 contact hours · 1 November – 19 December 2026 · Online": [1.08, -2],
+      "11-01-2027": [1.35, 0]
+    }
+  },
+  "portal": {
+    "Code.gs": [
+      ["  eligibleFolderName: 'Eligible participants',", "  eligibleFolderName: 'FCR Level 1 · Eligible participants',"],
+      ["  issuedFolderName: 'Issued certificates',", "  issuedFolderName: 'FCR Level 1 · Issued certificates',"],
+      ["  registerName: 'Certificate register',", "  registerName: 'FCR Level 1 · Certificate register',"],
+      ["  templateName: 'Certificate template (do not delete)',", "  templateName: 'FCR Level 1 · Certificate template (do not delete)',"],
+      ["  templatePptxName: 'certificate-template.pptx',", "  templatePptxName: 'certificate-template-fcr-level1.pptx',"],
+      ["  templatePptxUrl: 'https://raw.githubusercontent.com/neu-data/certificate-template/main/portal/certificate-template.pptx',", "  templatePptxUrl: 'https://raw.githubusercontent.com/neu-data/certificate-template/main/portal/courses/fcr-level1/certificate-template.pptx',"],
+      ["  idPrefix: 'NDC-TR-2026-1',                          // -> NDC-TR-2026-1-10XX-001", "  idPrefix: 'NDC-FCR-2026-1',                         // -> NDC-FCR-2026-1-10XX-001"],
+      ["  course: 'Clinical Data Analysis in R — Phase I',", "  course: 'Foundations of Clinical Research — Level 1',"],
+      ["  details: '5 online sessions · 7.5 contact hours · 8 September – 6 October 2026 · Online',", "  details: '8 online sessions · 24 contact hours · 1 November – 19 December 2026 · Online',"],
+      ["  issued: '06-10-2026',", "  issued: '11-01-2027',"],
+      ["  surveyUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSc6si0HLATTrUOayWTquPoTHDEcetL15qYjl_vFsKTRlxX-sQ/viewform',", "  surveyUrl: '',                                      // empty: the form made by setupSurvey() (Survey.gs) is used"],
+      ["  surveyCode: 'NDC-SURVEY-2026',", "  surveyCode: 'NDC-FCR-SURVEY-2026',"],
+      ["  assignmentTo: 'b.osangir@gmail.com',", "  assignmentTo: 'myluong1710@gmail.com',"],
+      ["  assignmentFolderName: 'Assignment submissions',", "  assignmentFolderName: 'FCR Level 1 · Assignment submissions',"],
+      ["  assignmentLogName: 'Assignment submission log',", "  assignmentLogName: 'FCR Level 1 · Assignment submission log',"],
+      ["  assignmentTypes: ['zip', 'r', 'rmd', 'qmd', 'html', 'pdf', 'docx', 'xlsx', 'csv', 'png'],", "  assignmentTypes: ['docx', 'pdf', 'pptx', 'zip'],"],
+      ["  accessLogName: 'Course access codes',", "  accessLogName: 'FCR Level 1 · Course access codes',"],
+      ["  accessPageUrl: 'https://neu-data.github.io/ClinicalDataAnalysisinR-Phase1/{lang}/access.html',", "  accessPageUrl: 'https://neu-data.github.io/FoundationsofClinicalResearch/{lang}/access.html',"],
+      ["    .setTitle('Certificate · Clinical Data Analysis in R · Neudata')", "    .setTitle('Certificate · Foundations of Clinical Research · Neudata')"],
+      ["  t.surveyUrl = CONFIG.surveyUrl;", "  t.surveyUrl = surveyUrl_();"],
+      ["    subject: 'Mã truy cập miễn phí — Phân tích Dữ liệu Lâm sàng bằng R',", "    subject: 'Mã truy cập miễn phí — Nền tảng Nghiên cứu Lâm sàng',"],
+      ["    subject: 'Your free access code — Clinical Data Analysis in R',", "    subject: 'Your free access code — Foundations of Clinical Research',"]
+    ],
+    "Portal.html": [
+      ["    course: \"Clinical Data Analysis in R — Phase I\",", "    course: \"Foundations of Clinical Research — Level 1\","],
+      ["    course: \"Phân tích Dữ liệu Lâm sàng bằng R — Giai đoạn I\",", "    course: \"Nền tảng Nghiên cứu Lâm sàng — Cấp độ 1\","],
+      ["placeholder=\"NDC-SURVEY-…\"", "placeholder=\"NDC-FCR-SURVEY-…\""]
+    ],
+    "Submit.html": [
+      ["    title: \"Submit your final assignment\",", "    title: \"Submit your Results section\","],
+      ["    course: \"Clinical Data Analysis in R — Phase I\",", "    course: \"Foundations of Clinical Research — Level 1\","],
+      ["    fileHint: \"Preferably one .zip file named Surname_Phase1_Assignment.zip (script or Quarto file, Table 1, figures and Results section). Maximum \" + MAXMB + \" MB.\",", "    fileHint: \"Your Results section as a Word file named Surname_Firstname_Results_QN.docx (for example Nguyen_An_Results_Q2.docx). Maximum \" + MAXMB + \" MB.\","],
+      ["    title: \"Nộp bài tập cuối khóa\",", "    title: \"Nộp phần Kết quả\","],
+      ["    course: \"Phân tích Dữ liệu Lâm sàng bằng R — Giai đoạn I\",", "    course: \"Nền tảng Nghiên cứu Lâm sàng — Cấp độ 1\","],
+      ["    fileHint: \"Tốt nhất là một tệp .zip tên Surname_Phase1_Assignment.zip (script hoặc tệp Quarto, Bảng 1, các hình và phần Kết quả). Tối đa \" +", "    fileHint: \"Phần Kết quả của bạn dưới dạng tệp Word, đặt tên Surname_Firstname_Results_QN.docx (ví dụ Nguyen_An_Results_Q2.docx). Tối đa \" +"]
+    ]
+  },
+  "extra": ["Survey.gs"]
+}

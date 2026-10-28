@@ -81,6 +81,16 @@ The design comes from [`design/certificate-design.webp`](design/certificate-desi
 
 Requires Python with Pillow, OpenCV, NumPy and `qrcode` (`pip install pillow opencv-python numpy qrcode`).
 
+## Other courses
+
+Each course gets its own Apps Script project made from these files, with its details in `courses/<course>/course.json`:
+
+| Course | Folder |
+|---|---|
+| Foundations of Clinical Research — Level 1 | [`courses/fcr-level1/`](courses/fcr-level1/) |
+
+`python portal/make_background.py courses/<course>` builds that course's background and template, and `python portal/make_course.py courses/<course>` writes its Apps Script files. Without a folder, `make_background.py` builds this portal's own background as before.
+
 ## Rules built in
 
 - **Unique IDs:** `NDC-TR-2026-1-10XX-NNN` — `XX` is random for each participant and `NNN` is a running number, so two people can never get the same ID. Generation is locked so simultaneous clicks cannot collide.
