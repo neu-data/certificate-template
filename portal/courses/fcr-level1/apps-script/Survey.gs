@@ -22,7 +22,6 @@ function setupSurvey() {
     'Foundations of Clinical Research · Level 1. About 5 minutes. Anonymous: we do not record your name or email. Only the trainers read the answers.\n' +
     'Nền tảng Nghiên cứu Lâm sàng · Cấp độ 1. Khoảng 5 phút. Ẩn danh: chúng tôi không ghi lại tên hay email của bạn. Chỉ giảng viên đọc câu trả lời.')
     .setCollectEmail(false)
-    .setRequireLogin(false)
     .setLimitOneResponsePerUser(false)
     .setShowLinkToRespondAgain(false)
     .setConfirmationMessage(

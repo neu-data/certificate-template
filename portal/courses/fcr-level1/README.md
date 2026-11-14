@@ -55,7 +55,7 @@ Signed in as **b.osangir@gmail.com**:
 2. **Project Settings** → tick **Show "appsscript.json" manifest file in editor**.
 3. Paste the files from [`apps-script/`](apps-script/): `appsscript.json`, `Code.gs`, new script files `Survey.gs` and `Registration.gs`, and HTML files `Portal`, `Verify` and `Submit`.
 4. Run **`setup`**, approve the permissions. It creates the folders, the empty registration list and the certificate template from [`certificate-template.pptx`](certificate-template.pptx).
-5. Run **`setupSurvey`**, approve the Forms permission. The log shows the evaluation form link: use it for the course evaluation in Session 8 too.
+5. The course evaluation form already exists (made on 14 November 2026): https://docs.google.com/forms/d/e/1FAIpQLSeml0_dDonEW-JpHI6_iJG5aqRwQNezGQERaJvTdWqFKT_CdQ/viewform . Its link is in `CONFIG.surveyUrl`, so do **not** run `setupSurvey`. Run it only to make a new form, after emptying `CONFIG.surveyUrl`.
 6. **Deploy → New deployment → Web app**, *Execute as:* Me, *Who has access:* Anyone. Copy the Web app URL: this is the certificate link for participants.
 7. Test: run `addMeToEligibleList` (adds you to the registration list as a completed participant; as the owner you can test before 11 January), open the URL, submit the survey, generate your certificate, then run `voidMyCertificate` and delete your row from the list.
 8. After the course: fill in or import the registration list (see above).

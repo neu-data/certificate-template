@@ -44,7 +44,7 @@ const CONFIG = {
   // Participant feedback survey (Google Form, about 3 minutes; answers are anonymous). It must be
   // completed before a certificate can be generated: the form's confirmation message shows this
   // completion code, which the certificate page asks for. Change both together.
-  surveyUrl: '',                                      // empty: the form made by setupSurvey() (Survey.gs) is used
+  surveyUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSeml0_dDonEW-JpHI6_iJG5aqRwQNezGQERaJvTdWqFKT_CdQ/viewform',   // course evaluation form (made 14 Nov 2026 with create_evaluation_form.gs). Empty: the form made by setupSurvey() is used
   surveyCode: 'NDC-FCR-SURVEY-2026',
 
   // Final-assignment submissions (page: <web app URL>?page=submit)

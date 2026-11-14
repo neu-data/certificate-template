@@ -61,7 +61,7 @@
       ],
       [
         "  surveyUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSc6si0HLATTrUOayWTquPoTHDEcetL15qYjl_vFsKTRlxX-sQ/viewform',",
-        "  surveyUrl: '',                                      // empty: the form made by setupSurvey() (Survey.gs) is used"
+        "  surveyUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSeml0_dDonEW-JpHI6_iJG5aqRwQNezGQERaJvTdWqFKT_CdQ/viewform',   // course evaluation form (made 14 Nov 2026 with create_evaluation_form.gs). Empty: the form made by setupSurvey() is used"
       ],
       [
         "  surveyCode: 'NDC-SURVEY-2026',",
